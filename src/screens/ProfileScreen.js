@@ -22,10 +22,12 @@ export default function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Profile</Text>
-      </View>
+    <View style={styles.container}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: '#fff' }}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>My Profile</Text>
+        </View>
+      </SafeAreaView>
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Profile Card */}
@@ -86,38 +88,38 @@ export default function ProfileScreen() {
 
         <Text style={styles.versionText}>PPS Driver App v1.0.0</Text>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { padding: 20, paddingTop: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
+  header: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
   content: { padding: 20, paddingBottom: 40 },
   
-  profileCard: { backgroundColor: '#fff', borderRadius: 16, padding: 20, flexDirection: 'row', alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: '#f3f4f6', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  avatarContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 16, borderWidth: 2, borderColor: '#bfdbfe' },
-  avatarText: { fontSize: 28, fontWeight: 'bold', color: '#2563eb' },
+  profileCard: { backgroundColor: '#fff', borderRadius: 10, padding: 20, flexDirection: 'row', alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: '#e5e7eb' },
+  avatarContainer: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 16, borderWidth: 1, borderColor: '#bfdbfe' },
+  avatarText: { fontSize: 24, fontWeight: 'bold', color: '#2563eb' },
   profileInfo: { flex: 1 },
-  name: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
+  name: { fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
   statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ecfdf5', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' },
   statusText: { fontSize: 11, fontWeight: '600', color: '#047857', marginLeft: 4 },
   
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#6b7280', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 4 },
-  sectionCard: { backgroundColor: '#fff', borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: '#f3f4f6', overflow: 'hidden' },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#6b7280', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 4 },
+  sectionCard: { backgroundColor: '#fff', borderRadius: 10, marginBottom: 24, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' },
   infoRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
   borderBottom: { borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  iconContainer: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  iconContainer: { width: 36, height: 36, borderRadius: 6, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   infoContent: { flex: 1 },
-  infoLabel: { fontSize: 12, color: '#6b7280', marginBottom: 2 },
+  infoLabel: { fontSize: 11, color: '#6b7280', marginBottom: 2 },
   infoValue: { fontSize: 15, fontWeight: '500', color: '#111827' },
   
   actionRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  actionIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  actionIcon: { width: 36, height: 36, borderRadius: 6, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   actionText: { flex: 1, fontSize: 15, fontWeight: '500', color: '#111827' },
   
-  logoutBtn: { backgroundColor: '#fef2f2', borderRadius: 16, padding: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#fee2e2' },
+  logoutBtn: { backgroundColor: '#fef2f2', borderRadius: 10, padding: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#fee2e2' },
   logoutBtnText: { color: '#dc2626', fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
   
   versionText: { textAlign: 'center', color: '#9ca3af', fontSize: 12, marginTop: 24 },

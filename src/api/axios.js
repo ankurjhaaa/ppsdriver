@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 // Set base URL to your Laravel API
-export const API_URL = 'http://192.168.1.8:8000/api/driver'; 
+export const API_URL = 'http://192.168.29.128:8000/api/driver'; 
 
 const api = axios.create({
   baseURL: API_URL,

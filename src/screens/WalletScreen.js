@@ -45,10 +45,12 @@ export default function WalletScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Wallet</Text>
-      </View>
+    <View style={styles.container}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: '#fff' }}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>My Wallet</Text>
+        </View>
+      </SafeAreaView>
 
       <ScrollView 
         contentContainerStyle={styles.content}
@@ -121,33 +123,33 @@ export default function WalletScreen() {
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' },
-  header: { padding: 20, paddingTop: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
+  header: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
   content: { padding: 20, paddingBottom: 40 },
   
   balanceContainer: { marginBottom: 24 },
-  mainCard: { backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: '#bfdbfe', shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  negativeCard: { borderColor: '#fecaca', shadowColor: '#ef4444' },
+  mainCard: { backgroundColor: '#fff', borderRadius: 10, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: '#bfdbfe' },
+  negativeCard: { borderColor: '#fecaca' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   cardLabel: { fontSize: 11, fontWeight: 'bold', color: '#6b7280', letterSpacing: 0.5 },
-  balanceAmount: { fontSize: 36, fontWeight: '900', color: '#1d4ed8' },
+  balanceAmount: { fontSize: 32, fontWeight: '900', color: '#1d4ed8' },
   negativeText: { color: '#b91c1c' },
   
   subCardsContainer: { flexDirection: 'row', gap: 12 },
-  subCard: { flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#f3f4f6', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
-  subAmount: { fontSize: 20, fontWeight: '800' },
+  subCard: { flex: 1, backgroundColor: '#fff', borderRadius: 10, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
+  subAmount: { fontSize: 18, fontWeight: '800' },
   
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#374151', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
-  historyContainer: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#f3f4f6', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#6b7280', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 4 },
+  historyContainer: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' },
   transactionItem: { flexDirection: 'row', padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  txIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  txIcon: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   txIconCredit: { backgroundColor: '#d1fae5' },
   txIconDebit: { backgroundColor: '#fee2e2' },
   txInfo: { flex: 1, justifyContent: 'center' },

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import * as Location from 'expo-location';
 import api from '../api/axios';
 import { AuthContext } from './AuthContext';
@@ -13,6 +13,7 @@ export const LocationProvider = ({ children }) => {
   const [currentJob, setCurrentJob] = useState(null);
   const [currentLocation, setCurrentLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
+  const subscriptionRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -27,22 +28,32 @@ export const LocationProvider = ({ children }) => {
         setErrorMsg('Permission to access background location was denied');
       }
     })();
+
+    // Cleanup on unmount
+    return () => {
+      if (subscriptionRef.current) {
+        subscriptionRef.current.remove();
+        subscriptionRef.current = null;
+      }
+    };
   }, []);
 
-  // Define the background task if not already defined
-  // (Usually done outside component, but putting setup here for simplicity)
-  
   const startTracking = async (job) => {
     try {
       setCurrentJob(job);
       setIsTracking(true);
       
-      // Start foreground tracking for UI updates
-      await Location.watchPositionAsync(
+      // Clear any existing subscription
+      if (subscriptionRef.current) {
+        subscriptionRef.current.remove();
+        subscriptionRef.current = null;
+      }
+
+      const sub = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
           timeInterval: 5000,
-          distanceInterval: 10,
+          distanceInterval: 0,
         },
         async (location) => {
           setCurrentLocation(location);
@@ -62,6 +73,7 @@ export const LocationProvider = ({ children }) => {
           }
         }
       );
+      subscriptionRef.current = sub;
     } catch (e) {
       console.log('Error starting tracking:', e);
     }
@@ -70,7 +82,10 @@ export const LocationProvider = ({ children }) => {
   const stopTracking = async () => {
     setIsTracking(false);
     setCurrentJob(null);
-    // Location tracking stops when component unmounts or we manage subscription
+    if (subscriptionRef.current) {
+      subscriptionRef.current.remove();
+      subscriptionRef.current = null;
+    }
   };
 
   return (

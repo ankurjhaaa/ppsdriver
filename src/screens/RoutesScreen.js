@@ -39,10 +39,12 @@ export default function RoutesScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Assigned Routes</Text>
-      </View>
+    <View style={styles.container}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: '#fff' }}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Assigned Routes</Text>
+        </View>
+      </SafeAreaView>
 
       <ScrollView 
         contentContainerStyle={styles.content}
@@ -108,20 +110,20 @@ export default function RoutesScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' },
-  header: { padding: 20, paddingTop: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
+  header: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
   content: { padding: 20, paddingBottom: 40 },
   
-  routeCard: { backgroundColor: '#fff', borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: '#f3f4f6', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, overflow: 'hidden' },
+  routeCard: { backgroundColor: '#fff', borderRadius: 10, marginBottom: 20, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' },
   routeHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#f8fafc', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  iconContainer: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#dbeafe', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  iconContainer: { width: 40, height: 40, borderRadius: 8, backgroundColor: '#dbeafe', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   routeHeaderInfo: { flex: 1 },
   routeName: { fontSize: 16, fontWeight: 'bold', color: '#0f172a', marginBottom: 4 },
   vehicleInfo: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -142,7 +144,7 @@ const styles = StyleSheet.create({
   studentPickup: { fontSize: 11, color: '#64748b', backgroundColor: '#f8fafc', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   noStudentsText: { fontSize: 13, color: '#94a3b8', fontStyle: 'italic', marginTop: 8 },
   
-  emptyCard: { backgroundColor: '#fff', borderRadius: 16, padding: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f3f4f6', borderStyle: 'dashed', marginTop: 40 },
+  emptyCard: { backgroundColor: '#fff', borderRadius: 10, padding: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e5e7eb', borderStyle: 'dashed', marginTop: 40 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginTop: 16, marginBottom: 8 },
   emptyText: { fontSize: 14, color: '#6b7280', textAlign: 'center', lineHeight: 20 },
 });

@@ -11,15 +11,32 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // Register 401 response interceptor to auto logout
+    const interceptor = api.interceptors.response.use(
+      response => response,
+      async error => {
+        if (error.response && error.response.status === 401) {
+          await SecureStore.deleteItemAsync('userToken');
+          setUser(null);
+          setDriver(null);
+        }
+        return Promise.reject(error);
+      }
+    );
+
     bootstrapAsync();
+
+    return () => {
+      api.interceptors.response.eject(interceptor);
+    };
   }, []);
 
   const bootstrapAsync = async () => {
     try {
       const userToken = await SecureStore.getItemAsync('userToken');
       if (userToken) {
-        // Verify token
-        const response = await api.get('/me');
+        // Verify token using profile endpoint
+        const response = await api.get('/profile');
         setUser(response.data.user);
         setDriver(response.data.driver);
       }
