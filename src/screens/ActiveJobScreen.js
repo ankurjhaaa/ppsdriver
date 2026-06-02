@@ -297,7 +297,7 @@ export default function ActiveJobScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeContainer: { flex: 1, backgroundColor: '#f9fafb' },
+  safeContainer: { flex: 1, backgroundColor: '#ffffff' },
   container: { flex: 1, backgroundColor: '#f9fafb' },
   
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
