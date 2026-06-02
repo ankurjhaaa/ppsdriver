@@ -99,8 +99,8 @@ export default function HomeScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  const proceedToStartJob = async (route, isManual = false, reason = null) => {
-    console.log('[HomeScreen] proceedToStartJob called. Route:', route?.id, 'isManual:', isManual, 'reason:', reason);
+  const proceedToStartJob = async (route, isManual = false, reason = null, tripDirection = null) => {
+    console.log('[HomeScreen] proceedToStartJob called. Route:', route?.id, 'isManual:', isManual, 'reason:', reason, 'tripDirection:', tripDirection);
     try {
       const vehicleId = route ? route.vehicle_id : (dashboardData?.todays_routes?.[0]?.vehicle_id || null);
       if (!vehicleId) {
@@ -119,12 +119,13 @@ export default function HomeScreen({ navigation }) {
         Alert.alert('Location Error', 'Unable to get your current location. Please ensure location services are enabled.');
         return;
       }
-
+ 
       console.log('[HomeScreen] Sending job start request to API...');
       const response = await api.post('/job/start', {
         vehicle_id: vehicleId,
         job_type: isManual ? 'manual' : 'route',
         route_id: route ? route.id : null,
+        trip_direction: tripDirection,
         reason: reason,
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
@@ -137,6 +138,32 @@ export default function HomeScreen({ navigation }) {
       console.log('[HomeScreen] Error starting job:', e.response?.data?.message || e.message);
       Alert.alert('Error', e.response?.data?.message || 'Failed to start job');
     }
+  };
+
+  const handleStartRouteJob = (route) => {
+    Alert.alert(
+      'Trip Direction',
+      'Choose the trip direction for this route:',
+      [
+        {
+          text: 'School Lane (To School)',
+          onPress: () => {
+            proceedToStartJob(route, false, null, 'to_school');
+          }
+        },
+        {
+          text: 'Chhodne (From School)',
+          onPress: () => {
+            proceedToStartJob(route, false, null, 'from_school');
+          }
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        }
+      ],
+      { cancelable: true }
+    );
   };
 
   const startNewJob = async (type) => {
@@ -299,7 +326,7 @@ export default function HomeScreen({ navigation }) {
                     style={styles.modalRouteCard}
                     onPress={() => {
                       closeRouteModal();
-                      proceedToStartJob(route);
+                      handleStartRouteJob(route);
                     }}
                   >
                     <View style={styles.modalRouteCardHeader}>

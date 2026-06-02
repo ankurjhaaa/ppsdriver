@@ -12,8 +12,8 @@ export default function ActiveJobScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'pending', 'dropped'
   const [pulse, setPulse] = useState(true);
-  const [activeDrops, setActiveDrops] = useState(
-    currentJob?.drops?.map(d => d.student_id) || []
+  const [activeActions, setActiveActions] = useState(
+    currentJob?.actions?.map(a => a.student_id) || []
   );
 
   // Pulse effect for live telemetry dot
@@ -25,30 +25,33 @@ export default function ActiveJobScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    if (currentJob?.drops) {
-      setActiveDrops(currentJob.drops.map(d => d.student_id));
+    if (currentJob?.actions) {
+      setActiveActions(currentJob.actions.map(a => a.student_id));
     }
   }, [currentJob]);
 
-  const dropStudent = async (studentId) => {
-    console.log('[ActiveJobScreen] Attempting to drop student. ID:', studentId);
+  const performAction = async (studentId) => {
+    const actionType = currentJob?.trip_direction === 'to_school' ? 'pickup' : 'drop';
+    console.log(`[ActiveJobScreen] Attempting to ${actionType} student. ID:`, studentId);
     try {
       const lat = currentLocation?.coords?.latitude || null;
       const lng = currentLocation?.coords?.longitude || null;
-      console.log('[ActiveJobScreen] Drop coordinates:', lat, lng);
+      console.log(`[ActiveJobScreen] ${actionType} coordinates:`, lat, lng);
 
-      const response = await api.post('/drop-student', {
+      const response = await api.post('/student-action', {
         student_id: studentId,
+        action_type: actionType,
         latitude: lat,
         longitude: lng,
       });
 
-      console.log('[ActiveJobScreen] Student drop logged on backend successfully');
-      setActiveDrops(prev => [...prev, studentId]);
-      Alert.alert('Student Dropped', 'Student marked as dropped successfully.');
+      console.log(`[ActiveJobScreen] Student ${actionType} logged on backend successfully`);
+      setActiveActions(prev => [...prev, studentId]);
+      const successText = actionType === 'pickup' ? 'picked up' : 'dropped off';
+      Alert.alert('Success', `Student marked as ${successText} successfully.`);
     } catch (e) {
-      console.log('[ActiveJobScreen] Student drop failed. Error:', e.response?.data?.message || e.message);
-      Alert.alert('Error', e.response?.data?.message || 'Failed to record student drop');
+      console.log(`[ActiveJobScreen] Student ${actionType} failed. Error:`, e.response?.data?.message || e.message);
+      Alert.alert('Error', e.response?.data?.message || `Failed to record student ${actionType}`);
     }
   };
 
@@ -121,18 +124,20 @@ export default function ActiveJobScreen({ navigation }) {
     const query = searchQuery.toLowerCase();
     const matchesSearch = name.includes(query) || pickup.includes(query);
 
-    const isDropped = activeDrops.includes(st.student_id);
+    const hasAction = activeActions.includes(st.student_id);
     if (activeTab === 'pending') {
-      return matchesSearch && !isDropped;
+      return matchesSearch && !hasAction;
     }
-    if (activeTab === 'dropped') {
-      return matchesSearch && isDropped;
+    if (activeTab === 'dropped' || activeTab === 'picked_up') {
+      return matchesSearch && hasAction;
     }
     return matchesSearch;
   });
 
-  const pendingCount = studentsList.filter(st => !activeDrops.includes(st.student_id)).length;
-  const droppedCount = activeDrops.length;
+  const pendingCount = studentsList.filter(st => !activeActions.includes(st.student_id)).length;
+  const actionCount = activeActions.length;
+  
+  const isToSchool = currentJob?.trip_direction === 'to_school';
 
   return (
     <View style={styles.container}>
@@ -141,7 +146,11 @@ export default function ActiveJobScreen({ navigation }) {
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>
-              {currentJob.job_type === 'route' ? 'School Route' : 'Other Trip'}
+              {currentJob.job_type === 'route' 
+                ? (currentJob.trip_direction 
+                    ? `School Route (${currentJob.trip_direction === 'to_school' ? 'To School' : 'From School'})` 
+                    : 'School Route')
+                : 'Other Trip'}
             </Text>
             <Text style={styles.headerSubtitle}>
               {currentJob.route?.route_name || currentJob.reason || 'Active Trip'}
@@ -197,7 +206,7 @@ export default function ActiveJobScreen({ navigation }) {
             <View style={styles.boardHeaderRow}>
               <Text style={styles.boardTitle}>Students List</Text>
               <Text style={styles.boardCount}>
-                {droppedCount}/{studentsList.length} dropped
+                {actionCount}/{studentsList.length} {isToSchool ? 'picked up' : 'dropped'}
               </Text>
             </View>
 
@@ -232,11 +241,11 @@ export default function ActiveJobScreen({ navigation }) {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'dropped' && styles.tabButtonActive]}
-                onPress={() => setActiveTab('dropped')}
+                style={[styles.tabButton, (activeTab === 'dropped' || activeTab === 'picked_up') && styles.tabButtonActive]}
+                onPress={() => setActiveTab(isToSchool ? 'picked_up' : 'dropped')}
               >
-                <Text style={[styles.tabButtonText, activeTab === 'dropped' && styles.tabButtonTextActive]}>
-                  Dropped ({droppedCount})
+                <Text style={[styles.tabButtonText, (activeTab === 'dropped' || activeTab === 'picked_up') && styles.tabButtonTextActive]}>
+                  {isToSchool ? 'Picked Up' : 'Dropped'} ({actionCount})
                 </Text>
               </TouchableOpacity>
             </View>
@@ -244,11 +253,11 @@ export default function ActiveJobScreen({ navigation }) {
             {/* Students Listing */}
             {filteredStudents.length > 0 ? (
               filteredStudents.map((st, i) => {
-                const isDropped = activeDrops.includes(st.student_id);
+                const hasAction = activeActions.includes(st.student_id);
                 return (
                   <View 
                     key={st.id || i} 
-                    style={[styles.studentCard, isDropped && styles.studentCardDropped]}
+                    style={[styles.studentCard, hasAction && (isToSchool ? styles.studentCardPickup : styles.studentCardDropped)]}
                   >
                     <View style={styles.studentInitialContainer}>
                       <Text style={styles.studentInitial}>
@@ -257,7 +266,7 @@ export default function ActiveJobScreen({ navigation }) {
                     </View>
 
                     <View style={styles.studentDetails}>
-                      <Text style={[styles.studentName, isDropped && styles.studentNameDropped]}>
+                      <Text style={[styles.studentName, hasAction && (isToSchool ? styles.studentNamePickup : styles.studentNameDropped)]}>
                         {st.student?.user?.name || 'Unknown Student'}
                       </Text>
                       <View style={styles.pickupPointRow}>
@@ -268,17 +277,17 @@ export default function ActiveJobScreen({ navigation }) {
                       </View>
                     </View>
 
-                    {isDropped ? (
-                      <View style={styles.dropSuccessBadge}>
-                        <Check size={14} color="#15803d" weight="bold" />
-                        <Text style={styles.dropSuccessText}>Dropped</Text>
+                    {hasAction ? (
+                      <View style={[styles.dropSuccessBadge, isToSchool && styles.pickupSuccessBadge]}>
+                        <Check size={14} color={isToSchool ? "#4338ca" : "#15803d"} weight="bold" />
+                        <Text style={[styles.dropSuccessText, isToSchool && styles.pickupSuccessText]}>{isToSchool ? 'Picked Up' : 'Dropped'}</Text>
                       </View>
                     ) : (
                       <TouchableOpacity
-                        style={styles.markDropBtn}
-                        onPress={() => dropStudent(st.student_id)}
+                        style={[styles.markDropBtn, isToSchool && styles.markPickupBtn]}
+                        onPress={() => performAction(st.student_id)}
                       >
-                        <Text style={styles.markDropBtnText}>Mark Drop</Text>
+                        <Text style={styles.markDropBtnText}>{isToSchool ? 'Pick Up' : 'Mark Drop'}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -358,18 +367,23 @@ const styles = StyleSheet.create({
 
   studentCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', backgroundColor: '#fff', borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' },
   studentCardDropped: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
+  studentCardPickup: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' },
   studentInitialContainer: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   studentInitial: { fontSize: 14, fontWeight: 'bold', color: '#4b5563' },
   studentDetails: { flex: 1, marginRight: 8 },
   studentName: { fontSize: 14, fontWeight: '600', color: '#1f2937' },
   studentNameDropped: { textDecorationLine: 'line-through', color: '#15803d' },
+  studentNamePickup: { color: '#4338ca' },
   pickupPointRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   pickupPointText: { fontSize: 11, color: '#6b7280' },
 
   markDropBtn: { backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
+  markPickupBtn: { backgroundColor: '#4f46e5' },
   markDropBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   dropSuccessBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#d1fae5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#86efac' },
+  pickupSuccessBadge: { backgroundColor: '#e0e7ff', borderColor: '#a5b4fc' },
   dropSuccessText: { color: '#15803d', fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
+  pickupSuccessText: { color: '#4338ca' },
 
   emptySearchCard: { alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#f9fafb', borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', borderStyle: 'dashed' },
   emptySearchText: { marginTop: 8, fontSize: 13, color: '#9ca3af' },
