@@ -10,11 +10,13 @@ export default function RoutesScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchRoutes = async () => {
+    console.log('[RoutesScreen] Fetching transport routes...');
     try {
       const response = await api.get('/routes');
       setRoutes(response.data.routes || []);
+      console.log('[RoutesScreen] Routes loaded successfully. Count:', (response.data.routes || []).length);
     } catch (e) {
-      console.log('Error fetching routes', e);
+      console.log('[RoutesScreen] Error fetching routes:', e.message);
     } finally {
       setLoading(false);
     }
@@ -25,6 +27,7 @@ export default function RoutesScreen() {
   }, []);
 
   const onRefresh = async () => {
+    console.log('[RoutesScreen] Pull-to-refresh routes triggered');
     setRefreshing(true);
     await fetchRoutes();
     setRefreshing(false);

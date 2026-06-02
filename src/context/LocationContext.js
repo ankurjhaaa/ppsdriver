@@ -17,13 +17,16 @@ export const LocationProvider = ({ children }) => {
 
   useEffect(() => {
     (async () => {
+      console.log('[LocationContext] Requesting location permissions...');
       let { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      console.log('[LocationContext] Foreground location permission status:', fgStatus);
       if (fgStatus !== 'granted') {
         setErrorMsg('Permission to access foreground location was denied');
         return;
       }
 
       let { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+      console.log('[LocationContext] Background location permission status:', bgStatus);
       if (bgStatus !== 'granted') {
         setErrorMsg('Permission to access background location was denied');
       }
@@ -32,6 +35,7 @@ export const LocationProvider = ({ children }) => {
     // Cleanup on unmount
     return () => {
       if (subscriptionRef.current) {
+        console.log('[LocationContext] Cleaning up position subscription on unmount');
         subscriptionRef.current.remove();
         subscriptionRef.current = null;
       }
@@ -40,15 +44,18 @@ export const LocationProvider = ({ children }) => {
 
   const startTracking = async (job) => {
     try {
+      console.log('[LocationContext] Starting tracking for job:', job ? `ID: ${job.id}, type: ${job.job_type}` : 'None');
       setCurrentJob(job);
       setIsTracking(true);
       
       // Clear any existing subscription
       if (subscriptionRef.current) {
+        console.log('[LocationContext] Removing existing position subscription...');
         subscriptionRef.current.remove();
         subscriptionRef.current = null;
       }
 
+      console.log('[LocationContext] Attaching watchPositionAsync listener (5s interval)');
       const sub = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
@@ -56,33 +63,38 @@ export const LocationProvider = ({ children }) => {
           distanceInterval: 0,
         },
         async (location) => {
+          console.log('[LocationContext] Received location update:', location.coords.latitude, location.coords.longitude, 'Speed:', location.coords.speed);
           setCurrentLocation(location);
           
           // Sync location to backend
           if (job) {
             try {
-              await api.post('/location', {
+              console.log('[LocationContext] Syncing location to backend...');
+              const response = await api.post('/location', {
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
                 speed: location.coords.speed,
                 heading: location.coords.heading,
               });
+              console.log('[LocationContext] Location synced successfully:', response.data.message);
             } catch (err) {
-              console.log('Location sync failed', err);
+              console.log('[LocationContext] Location sync failed:', err.response?.data?.message || err.message);
             }
           }
         }
       );
       subscriptionRef.current = sub;
     } catch (e) {
-      console.log('Error starting tracking:', e);
+      console.log('[LocationContext] Error starting tracking:', e);
     }
   };
 
   const stopTracking = async () => {
+    console.log('[LocationContext] Stopping tracking and clearing state');
     setIsTracking(false);
     setCurrentJob(null);
     if (subscriptionRef.current) {
+      console.log('[LocationContext] Removing watchPositionAsync listener');
       subscriptionRef.current.remove();
       subscriptionRef.current = null;
     }

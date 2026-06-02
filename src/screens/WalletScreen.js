@@ -10,6 +10,7 @@ export default function WalletScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchWallet = async () => {
+    console.log('[WalletScreen] Fetching wallet data...');
     try {
       const response = await api.get('/wallet');
       const entries = response.data.entries || [];
@@ -18,9 +19,10 @@ export default function WalletScreen() {
       const totalEarned = entries.filter(e => e.type === 'credit').reduce((sum, e) => sum + Number(e.amount), 0);
       const totalPaid = entries.filter(e => e.type === 'debit').reduce((sum, e) => sum + Number(e.amount), 0);
       
+      console.log('[WalletScreen] Wallet fetched successfully. Balance:', balance, 'Entries loaded:', entries.length);
       setData({ balance, totalEarned, totalPaid, entries });
     } catch (e) {
-      console.log('Error fetching wallet', e);
+      console.log('[WalletScreen] Error fetching wallet data:', e.message);
     } finally {
       setLoading(false);
     }
@@ -31,6 +33,7 @@ export default function WalletScreen() {
   }, []);
 
   const onRefresh = async () => {
+    console.log('[WalletScreen] Pull-to-refresh wallet triggered');
     setRefreshing(true);
     await fetchWallet();
     setRefreshing(false);

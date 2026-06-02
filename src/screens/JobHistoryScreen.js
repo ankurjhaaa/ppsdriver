@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ClockCounterClockwise, MapPin, GasPump, NavigationArrow, CheckCircle, WarningCircle } from 'phosphor-react-native';
 import api from '../api/axios';
 
-export default function JobHistoryScreen() {
+export default function JobHistoryScreen({ navigation }) {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,7 +64,15 @@ export default function JobHistoryScreen() {
             const statusConfig = getStatusConfig(job.status);
             
             return (
-              <View key={job.id} style={styles.jobCard}>
+              <TouchableOpacity 
+                key={job.id} 
+                style={styles.jobCard} 
+                onPress={() => {
+                  console.log('[JobHistoryScreen] Tapped Job ID:', job.id);
+                  navigation.navigate('JobDetails', { jobId: job.id });
+                }}
+                activeOpacity={0.7}
+              >
                 <View style={styles.jobHeader}>
                   <View style={styles.dateContainer}>
                     <Text style={styles.dateText}>
@@ -108,7 +116,7 @@ export default function JobHistoryScreen() {
                     </View>
                   </View>
                 )}
-              </View>
+              </TouchableOpacity>
             );
           })
         ) : (

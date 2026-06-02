@@ -66,21 +66,25 @@ export default function HomeScreen({ navigation }) {
   };
 
   const fetchDashboard = async () => {
+    console.log('[HomeScreen] Fetching dashboard data...');
     try {
       const response = await api.get('/dashboard');
       setDashboardData(response.data);
+      console.log('[HomeScreen] Dashboard data successfully loaded. Active job ID:', response.data.active_job?.id || 'None');
       if (response.data.active_job) {
         // Ensure tracking is active if there's an active job
         if (!currentJob) {
+          console.log('[HomeScreen] Found active job on backend but not tracking locally. Initializing local tracking...');
           startTracking(response.data.active_job);
         }
       } else {
         if (currentJob) {
+          console.log('[HomeScreen] No active job on backend but tracking locally. Stopping local tracking...');
           stopTracking();
         }
       }
     } catch (e) {
-      console.log('Error fetching dashboard', e);
+      console.log('[HomeScreen] Error fetching dashboard:', e.message);
     }
   };
 
@@ -89,27 +93,34 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   const onRefresh = async () => {
+    console.log('[HomeScreen] Dashboard pull-to-refresh triggered');
     setRefreshing(true);
     await fetchDashboard();
     setRefreshing(false);
   };
 
   const proceedToStartJob = async (route, isManual = false, reason = null) => {
+    console.log('[HomeScreen] proceedToStartJob called. Route:', route?.id, 'isManual:', isManual, 'reason:', reason);
     try {
       const vehicleId = route ? route.vehicle_id : (dashboardData?.todays_routes?.[0]?.vehicle_id || null);
       if (!vehicleId) {
+        console.log('[HomeScreen] Job start failed: No vehicle assigned');
         Alert.alert('No Vehicle', 'You need an assigned vehicle to start a job.');
         return;
       }
       
+      console.log('[HomeScreen] Requesting current location for job start...');
       let location;
       try {
         location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        console.log('[HomeScreen] Current location acquired:', location.coords.latitude, location.coords.longitude);
       } catch (err) {
+        console.log('[HomeScreen] Failed to get current location:', err.message);
         Alert.alert('Location Error', 'Unable to get your current location. Please ensure location services are enabled.');
         return;
       }
 
+      console.log('[HomeScreen] Sending job start request to API...');
       const response = await api.post('/job/start', {
         vehicle_id: vehicleId,
         job_type: isManual ? 'manual' : 'route',
@@ -119,9 +130,11 @@ export default function HomeScreen({ navigation }) {
         longitude: location.coords.longitude,
       });
       
+      console.log('[HomeScreen] Job started successfully on backend. ID:', response.data.job.id);
       startTracking(response.data.job);
       navigation.navigate('ActiveJob');
     } catch (e) {
+      console.log('[HomeScreen] Error starting job:', e.response?.data?.message || e.message);
       Alert.alert('Error', e.response?.data?.message || 'Failed to start job');
     }
   };

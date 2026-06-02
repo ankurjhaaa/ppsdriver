@@ -32,34 +32,42 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const bootstrapAsync = async () => {
+    console.log('[AuthContext] Bootstrapping auth state...');
     try {
       const userToken = await SecureStore.getItemAsync('userToken');
+      console.log('[AuthContext] Restored token from SecureStore:', userToken ? 'Found (active)' : 'Not found');
       if (userToken) {
-        // Verify token using profile endpoint
+        console.log('[AuthContext] Verifying restored token with backend...');
         const response = await api.get('/profile');
+        console.log('[AuthContext] Verification successful. User:', response.data.user.name, 'Driver ID:', response.data.driver?.id);
         setUser(response.data.user);
         setDriver(response.data.driver);
       }
     } catch (e) {
-      console.log('Token restore failed:', e);
+      console.log('[AuthContext] Token verification/restore failed. Error:', e.message);
       await SecureStore.deleteItemAsync('userToken');
+      setUser(null);
+      setDriver(null);
     }
     setIsLoading(false);
   };
 
   const login = async (email, password) => {
+    console.log('[AuthContext] Initiating login for email/phone:', email);
     setIsLoading(true);
     setError(null);
     try {
       const response = await api.post('/login', { email, password });
-      
       const { token, user, driver } = response.data;
+      console.log('[AuthContext] Login successful. Saving token to SecureStore. User:', user.name);
       await SecureStore.setItemAsync('userToken', token);
       
       setUser(user);
       setDriver(driver);
     } catch (e) {
-      setError(e.response?.data?.message || 'Login failed. Please check your credentials.');
+      const errMsg = e.response?.data?.message || 'Login failed. Please check your credentials.';
+      console.log('[AuthContext] Login failed. Error:', errMsg);
+      setError(errMsg);
       throw e;
     } finally {
       setIsLoading(false);
@@ -67,12 +75,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    console.log('[AuthContext] Initiating logout...');
     setIsLoading(true);
     try {
       await api.post('/logout');
+      console.log('[AuthContext] Logout API call succeeded');
     } catch (e) {
-      console.log('Logout error', e);
+      console.log('[AuthContext] Logout API error:', e.message);
     } finally {
+      console.log('[AuthContext] Clearing token from SecureStore and resetting state');
       await SecureStore.deleteItemAsync('userToken');
       setUser(null);
       setDriver(null);

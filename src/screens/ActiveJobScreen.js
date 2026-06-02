@@ -31,46 +31,65 @@ export default function ActiveJobScreen({ navigation }) {
   }, [currentJob]);
 
   const dropStudent = async (studentId) => {
+    console.log('[ActiveJobScreen] Attempting to drop student. ID:', studentId);
     try {
       const lat = currentLocation?.coords?.latitude || null;
       const lng = currentLocation?.coords?.longitude || null;
+      console.log('[ActiveJobScreen] Drop coordinates:', lat, lng);
 
-      await api.post('/drop-student', {
+      const response = await api.post('/drop-student', {
         student_id: studentId,
         latitude: lat,
         longitude: lng,
       });
 
+      console.log('[ActiveJobScreen] Student drop logged on backend successfully');
       setActiveDrops(prev => [...prev, studentId]);
       Alert.alert('Student Dropped', 'Student marked as dropped successfully.');
     } catch (e) {
+      console.log('[ActiveJobScreen] Student drop failed. Error:', e.response?.data?.message || e.message);
       Alert.alert('Error', e.response?.data?.message || 'Failed to record student drop');
     }
   };
 
   const endJob = async () => {
+    console.log('[ActiveJobScreen] Confirm end trip dialog triggered');
     Alert.alert(
       'End Trip',
       'Are you sure you want to end this trip? This will calculate your distance and wallet earnings.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel', onPress: () => console.log('[ActiveJobScreen] End trip cancelled') },
         { 
           text: 'End Trip', 
           style: 'destructive',
           onPress: async () => {
+            console.log('[ActiveJobScreen] Proceeding to end job ID:', currentJob?.id);
             setIsLoading(true);
             try {
+              const lat = currentLocation?.coords?.latitude || 25.7771;
+              const lng = currentLocation?.coords?.longitude || 87.4753;
+              console.log('[ActiveJobScreen] Final coordinates for end job:', lat, lng);
+
               const response = await api.post('/job/end', {
                 job_id: currentJob?.id,
-                latitude: currentLocation?.coords?.latitude || 25.7771,
-                longitude: currentLocation?.coords?.longitude || 87.4753,
+                latitude: lat,
+                longitude: lng,
               });
+              
+              console.log('[ActiveJobScreen] Job ended successfully on backend. Result stats:', JSON.stringify(response.data.summary));
               stopTracking();
               
-              Alert.alert('Trip Completed', `Distance: ${response.data.distance} km\nEarned: ₹${response.data.wallet_credit || 0}`, [
-                { text: 'OK', onPress: () => navigation.navigate('MainTabs') }
+              const distance = response.data.summary?.total_km || response.data.distance || 0;
+              const credit = response.data.summary?.wallet_credited || response.data.wallet_credit || 0;
+
+              Alert.alert('Trip Completed', `Distance: ${distance} km\nEarned: ₹${credit}`, [
+                { text: 'OK', onPress: () => {
+                  console.log('[ActiveJobScreen] Redirecting to main screen');
+                  navigation.navigate('MainTabs');
+                }}
               ]);
             } catch (e) {
+              console.log('[ActiveJobScreen] End job API failed. Error:', e.response?.data?.message || e.message);
               Alert.alert('Error', e.response?.data?.message || 'Failed to end job');
             } finally {
               setIsLoading(false);

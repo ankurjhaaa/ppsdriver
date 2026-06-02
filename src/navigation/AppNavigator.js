@@ -13,6 +13,7 @@ import WalletScreen from '../screens/WalletScreen';
 import RoutesScreen from '../screens/RoutesScreen';
 import JobHistoryScreen from '../screens/JobHistoryScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import JobDetailsScreen from '../screens/JobDetailsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -76,6 +77,7 @@ const AppNavigator = () => {
           <>
             <Stack.Screen name="MainTabs" component={TabNavigator} />
             <Stack.Screen name="ActiveJob" component={ActiveJobScreen} options={{ gestureEnabled: false }} />
+            <Stack.Screen name="JobDetails" component={JobDetailsScreen} />
           </>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />
