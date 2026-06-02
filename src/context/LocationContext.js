@@ -60,7 +60,7 @@ export const LocationProvider = ({ children }) => {
         {
           accuracy: Location.Accuracy.High,
           timeInterval: 5000,
-          distanceInterval: 0,
+          distanceInterval: 10,
         },
         async (location) => {
           console.log('[LocationContext] Received location update:', location.coords.latitude, location.coords.longitude, 'Speed:', location.coords.speed);
