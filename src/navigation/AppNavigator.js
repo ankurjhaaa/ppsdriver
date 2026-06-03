@@ -2,8 +2,9 @@ import React, { useContext } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
-import { CaretCircleDoubleUp, ClockCounterClockwise, MapTrifold, UserCircle, Wallet } from 'phosphor-react-native';
+import { House, MapTrifold, Wallet, ClockCounterClockwise, UserCircle } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 
 import { AuthContext } from '../context/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
@@ -25,28 +26,36 @@ const TabNavigator = () => {
       tabBarPosition="bottom"
       screenOptions={{
         swipeEnabled: true,
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarActiveTintColor: '#0A1931',
+        tabBarInactiveTintColor: '#94a3b8',
         tabBarShowLabel: true,
+        tabBarShowIcon: true,
         tabBarStyle: { 
-          height: 60 + insets.bottom, 
+          height: 62 + insets.bottom, 
           paddingBottom: insets.bottom,
           backgroundColor: '#fff',
           justifyContent: 'center',
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 3,
+          elevation: 10,
+          shadowColor: '#0A1931',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 6,
+          borderTopWidth: 0,
         },
         tabBarIndicatorStyle: {
-          height: 0, // hide the underline or set > 0 if you want an active indicator
+          backgroundColor: '#FDB813',
+          height: 3,
+          top: 0,
+          borderBottomLeftRadius: 3,
+          borderBottomRightRadius: 3,
         },
         tabBarLabelStyle: {
           fontSize: 10,
           textTransform: 'none',
           margin: 0,
-          padding: 0
+          padding: 0,
+          fontWeight: '700',
+          letterSpacing: 0.2,
         },
         tabBarIconStyle: {
           width: 24,
@@ -59,37 +68,42 @@ const TabNavigator = () => {
       <Tab.Screen 
         name="HomeTab" 
         component={HomeScreen} 
-        options={{ tabBarLabel: 'Home', tabBarIcon: ({ color }) => <CaretCircleDoubleUp color={color} size={24} weight="fill" /> }} 
+        options={{ tabBarLabel: 'Home', tabBarIcon: ({ color }) => <House color={color} size={22} weight="fill" /> }} 
       />
       <Tab.Screen 
         name="RoutesTab" 
         component={RoutesScreen} 
-        options={{ tabBarLabel: 'Routes', tabBarIcon: ({ color }) => <MapTrifold color={color} size={24} weight="fill" /> }} 
+        options={{ tabBarLabel: 'Routes', tabBarIcon: ({ color }) => <MapTrifold color={color} size={22} weight="fill" /> }} 
       />
       <Tab.Screen 
         name="WalletTab" 
         component={WalletScreen} 
-        options={{ tabBarLabel: 'Wallet', tabBarIcon: ({ color }) => <Wallet color={color} size={24} weight="fill" /> }} 
+        options={{ tabBarLabel: 'Wallet', tabBarIcon: ({ color }) => <Wallet color={color} size={22} weight="fill" /> }} 
       />
       <Tab.Screen 
         name="HistoryTab" 
         component={JobHistoryScreen} 
-        options={{ tabBarLabel: 'History', tabBarIcon: ({ color }) => <ClockCounterClockwise color={color} size={24} weight="fill" /> }} 
+        options={{ tabBarLabel: 'History', tabBarIcon: ({ color }) => <ClockCounterClockwise color={color} size={22} weight="fill" /> }} 
       />
       <Tab.Screen 
         name="ProfileTab" 
         component={ProfileScreen} 
-        options={{ tabBarLabel: 'Profile', tabBarIcon: ({ color }) => <UserCircle color={color} size={24} weight="fill" /> }} 
+        options={{ tabBarLabel: 'Profile', tabBarIcon: ({ color }) => <UserCircle color={color} size={22} weight="fill" /> }} 
       />
     </Tab.Navigator>
   );
 };
 
 const AppNavigator = () => {
-  const { user, isLoading } = useContext(AuthContext);
+  const { user, isBootstrapping } = useContext(AuthContext);
 
-  if (isLoading) {
-    return null; // or a loading splash screen
+  if (isBootstrapping) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FDB813" />
+        <Text style={styles.loadingText}>PPS Purnea Connecting...</Text>
+      </View>
+    );
   }
 
   return (
@@ -110,3 +124,19 @@ const AppNavigator = () => {
 };
 
 export default AppNavigator;
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#0A1931',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#fff',
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+});

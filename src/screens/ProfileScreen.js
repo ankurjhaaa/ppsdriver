@@ -1,15 +1,12 @@
 import React, { useContext } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, Phone, Envelope, IdentificationCard, ShieldCheck, SignOut, CaretRight, Car } from 'phosphor-react-native';
+import { User, Phone, Envelope, IdentificationCard, ShieldCheck, SignOut, CaretRight } from 'phosphor-react-native';
 import { AuthContext } from '../context/AuthContext';
+import CurvedHeader from '../components/CurvedHeader';
 
 export default function ProfileScreen() {
   const { user, driver, logout } = useContext(AuthContext);
-
-  const handleLogout = () => {
-    logout();
-  };
 
   const InfoRow = ({ icon, label, value, showBorder = true }) => (
     <View style={[styles.infoRow, showBorder && styles.borderBottom]}>
@@ -22,105 +19,84 @@ export default function ProfileScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      <SafeAreaView edges={['top']} style={{ backgroundColor: '#fff' }}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Profile</Text>
-        </View>
-      </SafeAreaView>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.name}>{user?.name}</Text>
-            <View style={styles.statusBadge}>
-              <ShieldCheck color="#059669" size={14} weight="bold" />
-              <Text style={styles.statusText}>Verified Driver</Text>
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <CurvedHeader title="My Profile" />
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Profile Card */}
+          <View style={styles.profileCard}>
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{user?.name}</Text>
+              <View style={styles.statusBadge}>
+                <ShieldCheck color="#059669" size={13} weight="bold" />
+                <Text style={styles.statusText}>Verified Driver</Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* Personal Details */}
-        <Text style={styles.sectionTitle}>Personal Details</Text>
-        <View style={styles.sectionCard}>
-          <InfoRow 
-            icon={<User color="#6b7280" size={20} />} 
-            label="Full Name" 
-            value={user?.name} 
-          />
-          <InfoRow 
-            icon={<Phone color="#6b7280" size={20} />} 
-            label="Phone Number" 
-            value={driver?.phone || user?.phone} 
-          />
-          <InfoRow 
-            icon={<Envelope color="#6b7280" size={20} />} 
-            label="Email Address" 
-            value={user?.email} 
-          />
-          <InfoRow 
-            icon={<IdentificationCard color="#6b7280" size={20} />} 
-            label="License Number" 
-            value={driver?.license_number} 
-            showBorder={false}
-          />
-        </View>
+          {/* Personal Details */}
+          <Text style={styles.sectionTitle}>PERSONAL DETAILS</Text>
+          <View style={styles.sectionCard}>
+            <InfoRow icon={<User color="#64748b" size={18} />} label="Full Name" value={user?.name} />
+            <InfoRow icon={<Phone color="#64748b" size={18} />} label="Phone" value={driver?.phone || user?.phone} />
+            <InfoRow icon={<Envelope color="#64748b" size={18} />} label="Email" value={user?.email} />
+            <InfoRow icon={<IdentificationCard color="#64748b" size={18} />} label="License" value={driver?.license_number} showBorder={false} />
+          </View>
 
-        {/* Support & Actions */}
-        <Text style={styles.sectionTitle}>Settings</Text>
-        <View style={styles.sectionCard}>
-          <TouchableOpacity style={styles.actionRow}>
-            <View style={styles.actionIcon}><Phone color="#2563eb" size={20} /></View>
-            <Text style={styles.actionText}>Contact Support</Text>
-            <CaretRight color="#9ca3af" size={16} weight="bold" />
+          {/* Settings */}
+          <Text style={styles.sectionTitle}>SETTINGS</Text>
+          <View style={styles.sectionCard}>
+            <TouchableOpacity style={styles.actionRow}>
+              <View style={styles.actionIcon}><Phone color="#0A58CA" size={18} /></View>
+              <Text style={styles.actionText}>Contact Support</Text>
+              <CaretRight color="#cbd5e1" size={16} weight="bold" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Logout */}
+          <TouchableOpacity style={styles.logoutBtn} onPress={logout} activeOpacity={0.85}>
+            <SignOut color="#dc2626" size={18} weight="bold" />
+            <Text style={styles.logoutBtnText}>Sign Out</Text>
           </TouchableOpacity>
-        </View>
 
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <SignOut color="#dc2626" size={20} weight="bold" />
-          <Text style={styles.logoutBtnText}>Sign Out</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.versionText}>PPS Driver App v1.0.0</Text>
-      </ScrollView>
-    </View>
+          <Text style={styles.versionText}>PPS Driver App v1.0.0</Text>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  content: { padding: 20, paddingBottom: 40 },
+  safeArea: { flex: 1, backgroundColor: '#0A1931' },
+  container: { flex: 1, backgroundColor: '#f4f6f9' },
+  content: { padding: 16, paddingBottom: 30 },
   
-  profileCard: { backgroundColor: '#fff', borderRadius: 10, padding: 20, flexDirection: 'row', alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: '#e5e7eb' },
-  avatarContainer: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 16, borderWidth: 1, borderColor: '#bfdbfe' },
-  avatarText: { fontSize: 24, fontWeight: 'bold', color: '#2563eb' },
+  profileCard: { backgroundColor: '#fff', borderRadius: 12, padding: 18, flexDirection: 'row', alignItems: 'center', marginBottom: 20, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
+  avatarContainer: { width: 56, height: 56, borderRadius: 18, backgroundColor: '#FDB813', justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  avatarText: { fontSize: 24, fontWeight: '900', color: '#0A1931' },
   profileInfo: { flex: 1 },
-  name: { fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ecfdf5', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' },
-  statusText: { fontSize: 11, fontWeight: '600', color: '#047857', marginLeft: 4 },
+  profileName: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginBottom: 4 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ecfdf5', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5, gap: 4 },
+  statusText: { fontSize: 10, fontWeight: '700', color: '#047857' },
   
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#6b7280', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 4 },
-  sectionCard: { backgroundColor: '#fff', borderRadius: 10, marginBottom: 24, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' },
-  infoRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  borderBottom: { borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  iconContainer: { width: 36, height: 36, borderRadius: 6, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  sectionTitle: { fontSize: 11, fontWeight: '800', color: '#64748b', marginBottom: 8, letterSpacing: 1, marginLeft: 2 },
+  sectionCard: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 20, overflow: 'hidden', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  borderBottom: { borderBottomWidth: 1, borderBottomColor: '#f4f6f9' },
+  iconContainer: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#f4f6f9', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   infoContent: { flex: 1 },
-  infoLabel: { fontSize: 11, color: '#6b7280', marginBottom: 2 },
-  infoValue: { fontSize: 15, fontWeight: '500', color: '#111827' },
+  infoLabel: { fontSize: 10, color: '#94a3b8', fontWeight: '700', marginBottom: 1 },
+  infoValue: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
   
-  actionRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  actionIcon: { width: 36, height: 36, borderRadius: 6, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  actionText: { flex: 1, fontSize: 15, fontWeight: '500', color: '#111827' },
+  actionRow: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  actionIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  actionText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0f172a' },
   
-  logoutBtn: { backgroundColor: '#fef2f2', borderRadius: 10, padding: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#fee2e2' },
-  logoutBtnText: { color: '#dc2626', fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
+  logoutBtn: { backgroundColor: '#fef2f2', borderRadius: 12, padding: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  logoutBtnText: { color: '#dc2626', fontSize: 15, fontWeight: '800' },
   
-  versionText: { textAlign: 'center', color: '#9ca3af', fontSize: 12, marginTop: 24 },
+  versionText: { textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 20, fontWeight: '600' },
 });

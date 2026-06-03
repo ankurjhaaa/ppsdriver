@@ -1,399 +1,301 @@
 import React, { useContext, useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, Platform, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CheckCircle, NavigationArrow, MapPin, GasPump, MagnifyingGlass, Check, Info } from 'phosphor-react-native';
+import { CheckCircle, MapPin, MagnifyingGlass, Check, GasPump, Clock, NavigationArrow, Users } from 'phosphor-react-native';
 import { LocationContext } from '../context/LocationContext';
 import api from '../api/axios';
+import CurvedHeader from '../components/CurvedHeader';
 
 export default function ActiveJobScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { currentJob, currentLocation, stopTracking } = useContext(LocationContext);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('all'); // 'all', 'pending', 'dropped'
+  const [activeTab, setActiveTab] = useState('all');
   const [pulse, setPulse] = useState(true);
   const [activeActions, setActiveActions] = useState(
     currentJob?.actions?.map(a => a.student_id) || []
   );
 
-  // Pulse effect for live telemetry dot
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPulse(p => !p);
-    }, 800);
+    const interval = setInterval(() => setPulse(p => !p), 800);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (currentJob?.actions) {
-      setActiveActions(currentJob.actions.map(a => a.student_id));
-    }
+    if (currentJob?.actions) setActiveActions(currentJob.actions.map(a => a.student_id));
   }, [currentJob]);
 
   const performAction = async (studentId) => {
     const actionType = currentJob?.trip_direction === 'to_school' ? 'pickup' : 'drop';
-    console.log(`[ActiveJobScreen] Attempting to ${actionType} student. ID:`, studentId);
     try {
       const lat = currentLocation?.coords?.latitude || null;
       const lng = currentLocation?.coords?.longitude || null;
-      console.log(`[ActiveJobScreen] ${actionType} coordinates:`, lat, lng);
-
-      const response = await api.post('/student-action', {
-        student_id: studentId,
-        action_type: actionType,
-        latitude: lat,
-        longitude: lng,
-      });
-
-      console.log(`[ActiveJobScreen] Student ${actionType} logged on backend successfully`);
+      await api.post('/student-action', { student_id: studentId, action_type: actionType, latitude: lat, longitude: lng });
       setActiveActions(prev => [...prev, studentId]);
-      const successText = actionType === 'pickup' ? 'picked up' : 'dropped off';
-      Alert.alert('Success', `Student marked as ${successText} successfully.`);
     } catch (e) {
-      console.log(`[ActiveJobScreen] Student ${actionType} failed. Error:`, e.response?.data?.message || e.message);
-      Alert.alert('Error', e.response?.data?.message || `Failed to record student ${actionType}`);
+      Alert.alert('Error', e.response?.data?.message || `Failed to record ${actionType}`);
     }
   };
 
   const endJob = async () => {
-    console.log('[ActiveJobScreen] Confirm end trip dialog triggered');
-    Alert.alert(
-      'End Trip',
-      'Are you sure you want to end this trip? This will calculate your distance and wallet earnings.',
-      [
-        { text: 'Cancel', style: 'cancel', onPress: () => console.log('[ActiveJobScreen] End trip cancelled') },
-        { 
-          text: 'End Trip', 
-          style: 'destructive',
-          onPress: async () => {
-            console.log('[ActiveJobScreen] Proceeding to end job ID:', currentJob?.id);
-            setIsLoading(true);
-            try {
-              const lat = currentLocation?.coords?.latitude || 25.7771;
-              const lng = currentLocation?.coords?.longitude || 87.4753;
-              console.log('[ActiveJobScreen] Final coordinates for end job:', lat, lng);
-
-              const response = await api.post('/job/end', {
-                job_id: currentJob?.id,
-                latitude: lat,
-                longitude: lng,
-              });
-              
-              console.log('[ActiveJobScreen] Job ended successfully on backend. Result stats:', JSON.stringify(response.data.summary));
-              stopTracking();
-              
-              const distance = response.data.summary?.total_km || response.data.distance || 0;
-              const credit = response.data.summary?.wallet_credited || response.data.wallet_credit || 0;
-
-              Alert.alert('Trip Completed', `Distance: ${distance} km\nEarned: ₹${credit}`, [
-                { text: 'OK', onPress: () => {
-                  console.log('[ActiveJobScreen] Redirecting to main screen');
-                  navigation.navigate('MainTabs');
-                }}
-              ]);
-            } catch (e) {
-              console.log('[ActiveJobScreen] End job API failed. Error:', e.response?.data?.message || e.message);
-              Alert.alert('Error', e.response?.data?.message || 'Failed to end job');
-            } finally {
-              setIsLoading(false);
-            }
-          }
-        }
-      ]
-    );
+    Alert.alert('Complete Trip', 'Are you sure you want to complete this trip?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Complete', style: 'destructive', onPress: async () => {
+        setIsLoading(true);
+        try {
+          const lat = currentLocation?.coords?.latitude || 25.7771;
+          const lng = currentLocation?.coords?.longitude || 87.4753;
+          const response = await api.post('/job/end', { job_id: currentJob?.id, latitude: lat, longitude: lng });
+          stopTracking();
+          const distance = response.data.summary?.total_km || response.data.distance || 0;
+          const credit = response.data.summary?.wallet_credited || response.data.wallet_credit || 0;
+          Alert.alert('Trip Completed', `Distance: ${distance} km\nEarned: ₹${credit}`, [
+            { text: 'OK', onPress: () => navigation.navigate('MainTabs') }
+          ]);
+        } catch (e) { Alert.alert('Error', e.response?.data?.message || 'Failed to end job'); }
+        finally { setIsLoading(false); }
+      }}
+    ]);
   };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#FDB813" />
+        <Text style={styles.loadingText}>Completing Trip & Updating Wallet...</Text>
+      </SafeAreaView>
+    );
+  }
 
   if (!currentJob) {
     return (
-      <SafeAreaView style={styles.safeContainer}>
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <CurvedHeader title="Active Trip" showBack onBack={() => navigation.navigate('MainTabs')} />
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No active job found.</Text>
+          <NavigationArrow color="#cbd5e1" size={48} weight="fill" />
+          <Text style={styles.emptyTitle}>No active job found</Text>
+          <Text style={styles.emptyText}>Start a new trip from the home page.</Text>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.navigate('MainTabs')}>
-            <Text style={styles.backBtnText}>Go Back</Text>
+            <Text style={styles.backBtnText}>Go to Home</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  // Filter students array based on search query and active tab selection
   const studentsList = currentJob.route?.students || [];
   const filteredStudents = studentsList.filter(st => {
     const name = (st.student?.user?.name || '').toLowerCase();
-    const pickup = (st.pickup_point || '').toLowerCase();
     const query = searchQuery.toLowerCase();
-    const matchesSearch = name.includes(query) || pickup.includes(query);
-
+    const matchesSearch = name.includes(query);
     const hasAction = activeActions.includes(st.student_id);
-    if (activeTab === 'pending') {
-      return matchesSearch && !hasAction;
-    }
-    if (activeTab === 'dropped' || activeTab === 'picked_up') {
-      return matchesSearch && hasAction;
-    }
+    if (activeTab === 'pending') return matchesSearch && !hasAction;
+    if (activeTab === 'done') return matchesSearch && hasAction;
     return matchesSearch;
   });
 
   const pendingCount = studentsList.filter(st => !activeActions.includes(st.student_id)).length;
   const actionCount = activeActions.length;
-  
   const isToSchool = currentJob?.trip_direction === 'to_school';
 
   return (
-    <View style={styles.container}>
-      {/* Header Container */}
-      <SafeAreaView edges={['top']} style={{ backgroundColor: '#fff' }}>
-        <View style={styles.header}>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>
-              {currentJob.job_type === 'route' 
-                ? (currentJob.trip_direction 
-                    ? `School Route (${currentJob.trip_direction === 'to_school' ? 'To School' : 'From School'})` 
-                    : 'School Route')
-                : 'Other Trip'}
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              {currentJob.route?.route_name || currentJob.reason || 'Active Trip'}
-            </Text>
-          </View>
-          <View style={styles.telemetryBadge}>
-            <View style={[styles.pulseDot, { opacity: pulse ? 1 : 0.3 }]} />
-            <Text style={styles.telemetryText}>Live</Text>
-          </View>
-        </View>
-      </SafeAreaView>
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <CurvedHeader 
+        title={currentJob.job_type === 'route' ? (isToSchool ? 'To School' : 'From School') : 'Ad-hoc Trip'}
+        subtitle={currentJob.route?.route_name || currentJob.reason || 'Active Trip'}
+        showBack onBack={() => navigation.navigate('MainTabs')}
+      />
 
-      <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Live Telemetry Info Panel */}
-        <View style={styles.telemetryPanel}>
-          <View style={styles.telemetryRow}>
-            <NavigationArrow color="#10b981" size={20} weight="fill" />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.telemetryStatusTitle}>Location Service Active</Text>
-              <Text style={styles.telemetryStatusDesc}>Sending GPS telemetry every 5 seconds</Text>
+      <View style={styles.container}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          
+          {/* Live Tracking Banner */}
+          <View style={styles.liveBanner}>
+            <View style={styles.liveBannerLeft}>
+              <View style={[styles.pulseDot, { opacity: pulse ? 1 : 0.3 }]} />
+              <Text style={styles.liveBannerTitle}>Location Tracking Active</Text>
             </View>
-          </View>
-        </View>
-
-        {/* Trip Stats Grid */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <GasPump color="#6b7280" size={16} />
-              <Text style={styles.statLabel}>VEHICLE</Text>
-            </View>
-            <Text style={styles.statValue}>{currentJob.vehicle?.vehicle_number || 'N/A'}</Text>
-            <Text style={styles.statSubText}>{currentJob.vehicle?.fuel_type || 'Fuel'}</Text>
+            <Text style={styles.liveBannerSub}>GPS streaming every 1s</Text>
           </View>
 
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <MapPin color="#6b7280" size={16} />
-              <Text style={styles.statLabel}>STOPS</Text>
+          {/* Trip Info Card */}
+          <View style={styles.tripInfoCard}>
+            <View style={styles.tripInfoRow}>
+              <View style={styles.tripInfoItem}>
+                <MapPin color="#3b82f6" size={16} weight="fill" />
+                <Text style={styles.tripInfoLabel}>ROUTE</Text>
+                <Text style={styles.tripInfoValue}>{currentJob.route?.route_name || currentJob.reason || 'Custom Trip'}</Text>
+              </View>
+              <View style={styles.tripInfoDivider} />
+              <View style={styles.tripInfoItem}>
+                <GasPump color="#FDB813" size={16} weight="fill" />
+                <Text style={styles.tripInfoLabel}>VEHICLE</Text>
+                <Text style={styles.tripInfoValue}>{currentJob.vehicle?.vehicle_number || 'N/A'}</Text>
+              </View>
+              <View style={styles.tripInfoDivider} />
+              <View style={styles.tripInfoItem}>
+                <Users color="#8b5cf6" size={16} weight="fill" />
+                <Text style={styles.tripInfoLabel}>STUDENTS</Text>
+                <Text style={styles.tripInfoValue}>{actionCount}/{studentsList.length}</Text>
+              </View>
             </View>
-            <Text style={styles.statValue}>{currentJob.route?.stops?.length || 0}</Text>
-            <Text style={styles.statSubText}>Enroute locations</Text>
           </View>
-        </View>
 
-        {/* Student Management Board */}
-        {currentJob.job_type === 'route' && (
-          <View style={styles.boardContainer}>
-            <View style={styles.boardHeaderRow}>
-              <Text style={styles.boardTitle}>Students List</Text>
-              <Text style={styles.boardCount}>
-                {actionCount}/{studentsList.length} {isToSchool ? 'picked up' : 'dropped'}
-              </Text>
-            </View>
+          {/* Student Management Board */}
+          {currentJob.job_type === 'route' && (
+            <View style={styles.boardContainer}>
+              <View style={styles.boardHeaderRow}>
+                <Text style={styles.boardTitle}>Students</Text>
+                <View style={styles.progressBadge}>
+                  <Text style={styles.progressText}>{actionCount}/{studentsList.length} {isToSchool ? 'picked' : 'dropped'}</Text>
+                </View>
+              </View>
 
-            {/* Search Input */}
-            <View style={styles.searchContainer}>
-              <MagnifyingGlass color="#9ca3af" size={20} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search students by name or pickup..."
-                placeholderTextColor="#9ca3af"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
+              {/* Search */}
+              <View style={styles.searchContainer}>
+                <MagnifyingGlass color="#94a3b8" size={18} />
+                <TextInput style={styles.searchInput} placeholder="Search students..." placeholderTextColor="#94a3b8" value={searchQuery} onChangeText={setSearchQuery} />
+              </View>
 
-            {/* Filter Tabs */}
-            <View style={styles.tabContainer}>
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'all' && styles.tabButtonActive]}
-                onPress={() => setActiveTab('all')}
-              >
-                <Text style={[styles.tabButtonText, activeTab === 'all' && styles.tabButtonTextActive]}>
-                  All ({studentsList.length})
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tabButton, activeTab === 'pending' && styles.tabButtonActive]}
-                onPress={() => setActiveTab('pending')}
-              >
-                <Text style={[styles.tabButtonText, activeTab === 'pending' && styles.tabButtonTextActive]}>
-                  Pending ({pendingCount})
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tabButton, (activeTab === 'dropped' || activeTab === 'picked_up') && styles.tabButtonActive]}
-                onPress={() => setActiveTab(isToSchool ? 'picked_up' : 'dropped')}
-              >
-                <Text style={[styles.tabButtonText, (activeTab === 'dropped' || activeTab === 'picked_up') && styles.tabButtonTextActive]}>
-                  {isToSchool ? 'Picked Up' : 'Dropped'} ({actionCount})
-                </Text>
-              </TouchableOpacity>
-            </View>
+              {/* Tabs */}
+              <View style={styles.tabContainer}>
+                {[
+                  { key: 'all', label: `All (${studentsList.length})` },
+                  { key: 'pending', label: `Pending (${pendingCount})` },
+                  { key: 'done', label: `${isToSchool ? 'Picked' : 'Dropped'} (${actionCount})` },
+                ].map(tab => (
+                  <TouchableOpacity key={tab.key} style={[styles.tabButton, activeTab === tab.key && styles.tabButtonActive]} onPress={() => setActiveTab(tab.key)}>
+                    <Text style={[styles.tabButtonText, activeTab === tab.key && styles.tabButtonTextActive]}>{tab.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-            {/* Students Listing */}
-            {filteredStudents.length > 0 ? (
-              filteredStudents.map((st, i) => {
+              {/* Student List */}
+              {filteredStudents.map((st, i) => {
                 const hasAction = activeActions.includes(st.student_id);
                 return (
-                  <View 
-                    key={st.id || i} 
-                    style={[styles.studentCard, hasAction && (isToSchool ? styles.studentCardPickup : styles.studentCardDropped)]}
-                  >
-                    <View style={styles.studentInitialContainer}>
-                      <Text style={styles.studentInitial}>
-                        {st.student?.user?.name?.charAt(0) || 'S'}
-                      </Text>
+                  <View key={st.id || i} style={[styles.studentCard, hasAction && styles.studentCardDone]}>
+                    <View style={[styles.studentAvatar, hasAction && styles.studentAvatarDone]}>
+                      <Text style={[styles.studentAvatarText, hasAction && { color: '#059669' }]}>{st.student?.user?.name?.charAt(0) || 'S'}</Text>
                     </View>
-
                     <View style={styles.studentDetails}>
-                      <Text style={[styles.studentName, hasAction && (isToSchool ? styles.studentNamePickup : styles.studentNameDropped)]}>
-                        {st.student?.user?.name || 'Unknown Student'}
-                      </Text>
-                      <View style={styles.pickupPointRow}>
-                        <MapPin size={12} color="#9ca3af" style={{ marginRight: 4 }} />
-                        <Text style={styles.pickupPointText}>
-                          {st.pickup_point || 'No pickup point listed'}
-                        </Text>
+                      <Text style={[styles.studentName, hasAction && styles.studentNameDone]}>{st.student?.user?.name || 'Unknown'}</Text>
+                      <View style={styles.pickupRow}>
+                        <MapPin size={11} color="#94a3b8" />
+                        <Text style={styles.pickupText}>{st.pickup_point || 'No pickup point'}</Text>
                       </View>
                     </View>
-
                     {hasAction ? (
-                      <View style={[styles.dropSuccessBadge, isToSchool && styles.pickupSuccessBadge]}>
-                        <Check size={14} color={isToSchool ? "#4338ca" : "#15803d"} weight="bold" />
-                        <Text style={[styles.dropSuccessText, isToSchool && styles.pickupSuccessText]}>{isToSchool ? 'Picked Up' : 'Dropped'}</Text>
+                      <View style={styles.doneBadge}>
+                        <Check size={12} color="#059669" weight="bold" />
+                        <Text style={styles.doneText}>{isToSchool ? 'Picked' : 'Dropped'}</Text>
                       </View>
                     ) : (
-                      <TouchableOpacity
-                        style={[styles.markDropBtn, isToSchool && styles.markPickupBtn]}
-                        onPress={() => performAction(st.student_id)}
-                      >
-                        <Text style={styles.markDropBtnText}>{isToSchool ? 'Pick Up' : 'Mark Drop'}</Text>
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => performAction(st.student_id)} activeOpacity={0.8}>
+                        <Text style={styles.actionBtnText}>{isToSchool ? 'Pick Up' : 'Drop'}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 );
-              })
-            ) : (
-              <View style={styles.emptySearchCard}>
-                <Info color="#9ca3af" size={24} />
-                <Text style={styles.emptySearchText}>No students match criteria</Text>
-              </View>
-            )}
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Footer Area with Complete Trip button */}
-      <View style={[styles.footer, { paddingBottom: Math.max(20, insets.bottom + 8) }]}>
-        <TouchableOpacity 
-          style={styles.endBtn} 
-          onPress={endJob}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <CheckCircle color="#fff" size={20} weight="bold" />
-              <Text style={styles.endBtnText}>Complete Trip</Text>
-            </>
+              })}
+              {filteredStudents.length === 0 && (
+                <View style={styles.noResults}><Text style={styles.noResultsText}>No students match</Text></View>
+              )}
+            </View>
           )}
-        </TouchableOpacity>
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={[styles.footer, { paddingBottom: Math.max(20, insets.bottom + 8) }]}>
+          <TouchableOpacity style={styles.endBtn} onPress={endJob} disabled={isLoading} activeOpacity={0.85}>
+            {isLoading ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <CheckCircle color="#fff" size={20} weight="bold" />
+                <Text style={styles.endBtnText}>Complete Trip</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeContainer: { flex: 1, backgroundColor: '#ffffff' },
-  container: { flex: 1, backgroundColor: '#f9fafb' },
+  safeArea: { flex: 1, backgroundColor: '#0A1931' },
+  container: { flex: 1, backgroundColor: '#f4f6f9' },
   
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  headerTitleContainer: { flex: 1, marginRight: 16 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
-  headerSubtitle: { fontSize: 13, color: '#6b7280', marginTop: 2 },
-  telemetryBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ecfdf5', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' },
-  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981', marginRight: 6 },
-  telemetryText: { fontSize: 12, fontWeight: 'bold', color: '#047857' },
-
   scrollView: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 32 },
+  scrollContent: { padding: 16, paddingBottom: 20 },
 
-  telemetryPanel: { backgroundColor: '#ecfdf5', borderRadius: 10, padding: 16, borderWidth: 1, borderColor: '#a7f3d0', marginBottom: 20 },
-  telemetryRow: { flexDirection: 'row', alignItems: 'center' },
-  telemetryStatusTitle: { fontSize: 14, fontWeight: 'bold', color: '#065f46' },
-  telemetryStatusDesc: { fontSize: 12, color: '#047857', marginTop: 2 },
+  // Live Banner
+  liveBanner: { backgroundColor: '#0A1931', borderRadius: 12, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  liveBannerLeft: { flexDirection: 'row', alignItems: 'center' },
+  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 8 },
+  liveBannerTitle: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  liveBannerSub: { color: '#FDB813', fontSize: 11, fontWeight: '600' },
 
-  statsGrid: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 10, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
-  statHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 6 },
-  statLabel: { fontSize: 10, fontWeight: 'bold', color: '#9ca3af', letterSpacing: 0.5 },
-  statValue: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
-  statSubText: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  // Trip Info
+  tripInfoCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
+  tripInfoRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  tripInfoItem: { flex: 1, alignItems: 'center' },
+  tripInfoDivider: { width: 1, backgroundColor: '#e2e8f0', height: '100%' },
+  tripInfoLabel: { fontSize: 9, fontWeight: '800', color: '#64748b', letterSpacing: 0.5, marginTop: 6, marginBottom: 4 },
+  tripInfoValue: { fontSize: 13, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
 
-  boardContainer: { backgroundColor: '#fff', borderRadius: 10, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
-  boardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  boardTitle: { fontSize: 15, fontWeight: 'bold', color: '#111827' },
-  boardCount: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
+  // Board
+  boardContainer: { backgroundColor: '#fff', borderRadius: 12, padding: 16, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
+  boardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  boardTitle: { fontSize: 16, fontWeight: '900', color: '#0f172a' },
+  progressBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  progressText: { fontSize: 11, fontWeight: '700', color: '#1d4ed8' },
 
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16 },
-  searchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: '#111827', padding: 0 },
+  // Search
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4f6f9', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
+  searchInput: { flex: 1, marginLeft: 8, fontSize: 13, color: '#0f172a', padding: 0 },
 
-  tabContainer: { flexDirection: 'row', backgroundColor: '#f3f4f6', borderRadius: 8, padding: 4, marginBottom: 16 },
-  tabButton: { flex: 1, paddingVertical: 8, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  tabButtonActive: { backgroundColor: '#fff' },
-  tabButtonText: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
-  tabButtonTextActive: { color: '#2563eb' },
+  // Tabs
+  tabContainer: { flexDirection: 'row', backgroundColor: '#f4f6f9', borderRadius: 8, padding: 3, marginBottom: 14 },
+  tabButton: { flex: 1, paddingVertical: 7, borderRadius: 6, alignItems: 'center' },
+  tabButtonActive: { backgroundColor: '#0A1931' },
+  tabButtonText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
+  tabButtonTextActive: { color: '#FDB813' },
 
-  studentCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', backgroundColor: '#fff', borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' },
-  studentCardDropped: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
-  studentCardPickup: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' },
-  studentInitialContainer: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  studentInitial: { fontSize: 14, fontWeight: 'bold', color: '#4b5563' },
+  // Student Cards
+  studentCard: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#fff', borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: '#f1f5f9' },
+  studentCardDone: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
+  studentAvatar: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  studentAvatarDone: { backgroundColor: '#dcfce7' },
+  studentAvatarText: { fontSize: 14, fontWeight: '800', color: '#475569' },
   studentDetails: { flex: 1, marginRight: 8 },
-  studentName: { fontSize: 14, fontWeight: '600', color: '#1f2937' },
-  studentNameDropped: { textDecorationLine: 'line-through', color: '#15803d' },
-  studentNamePickup: { color: '#4338ca' },
-  pickupPointRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  pickupPointText: { fontSize: 11, color: '#6b7280' },
+  studentName: { fontSize: 13, fontWeight: '800', color: '#0f172a' },
+  studentNameDone: { color: '#16a34a' },
+  pickupRow: { flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 3 },
+  pickupText: { fontSize: 10, color: '#94a3b8', fontWeight: '500' },
 
-  markDropBtn: { backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
-  markPickupBtn: { backgroundColor: '#4f46e5' },
-  markDropBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  dropSuccessBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#d1fae5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#86efac' },
-  pickupSuccessBadge: { backgroundColor: '#e0e7ff', borderColor: '#a5b4fc' },
-  dropSuccessText: { color: '#15803d', fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
-  pickupSuccessText: { color: '#4338ca' },
+  // Buttons
+  actionBtn: { backgroundColor: '#0A1931', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  actionBtnText: { color: '#FDB813', fontSize: 11, fontWeight: '800' },
+  doneBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#dcfce7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, gap: 4 },
+  doneText: { color: '#059669', fontSize: 11, fontWeight: '800' },
 
-  emptySearchCard: { alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#f9fafb', borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', borderStyle: 'dashed' },
-  emptySearchText: { marginTop: 8, fontSize: 13, color: '#9ca3af' },
+  noResults: { padding: 20, alignItems: 'center' },
+  noResultsText: { fontSize: 13, color: '#94a3b8' },
 
-  footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  endBtn: { backgroundColor: '#ef4444', borderRadius: 10, padding: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
-  endBtnText: { color: '#fff', fontSize: 15, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 },
+  // Footer
+  footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  endBtn: { backgroundColor: '#dc2626', borderRadius: 12, padding: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  endBtnText: { color: '#fff', fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  emptyText: { fontSize: 16, color: '#6b7280', marginBottom: 20 },
-  backBtn: { backgroundColor: '#2563eb', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 6 },
-  backBtnText: { color: '#fff', fontWeight: 'bold' }
+  // Empty
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#f4f6f9' },
+  emptyTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginTop: 16, marginBottom: 4 },
+  emptyText: { fontSize: 14, color: '#64748b', marginBottom: 20 },
+  backBtn: { backgroundColor: '#0A1931', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
+  backBtnText: { color: '#FDB813', fontWeight: '800', fontSize: 14 },
+  
+  // Loader
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A1931' },
+  loadingText: { color: '#fff', marginTop: 12, fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
 });

@@ -8,6 +8,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [driver, setDriver] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export const AuthProvider = ({ children }) => {
       setDriver(null);
     }
     setIsLoading(false);
+    setIsBootstrapping(false);
   };
 
   const login = async (email, password) => {
@@ -92,7 +94,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, driver, isLoading, error, login, logout, setDriver }}>
+    <AuthContext.Provider value={{ user, driver, isLoading, isBootstrapping, error, login, logout, setDriver }}>
       {children}
     </AuthContext.Provider>
   );

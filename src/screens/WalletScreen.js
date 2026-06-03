@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator }
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Wallet, ArrowCircleUp, ArrowCircleDown, Receipt } from 'phosphor-react-native';
 import api from '../api/axios';
+import CurvedHeader from '../components/CurvedHeader';
 
 export default function WalletScreen() {
   const [data, setData] = useState({ balance: 0, totalEarned: 0, totalPaid: 0, entries: [] });
@@ -10,163 +11,131 @@ export default function WalletScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchWallet = async () => {
-    console.log('[WalletScreen] Fetching wallet data...');
     try {
       const response = await api.get('/wallet');
       const entries = response.data.entries || [];
       const balance = response.data.balance || 0;
-      
       const totalEarned = entries.filter(e => e.type === 'credit').reduce((sum, e) => sum + Number(e.amount), 0);
       const totalPaid = entries.filter(e => e.type === 'debit').reduce((sum, e) => sum + Number(e.amount), 0);
-      
-      console.log('[WalletScreen] Wallet fetched successfully. Balance:', balance, 'Entries loaded:', entries.length);
       setData({ balance, totalEarned, totalPaid, entries });
-    } catch (e) {
-      console.log('[WalletScreen] Error fetching wallet data:', e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.log('[WalletScreen] Error:', e.message); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchWallet();
-  }, []);
-
-  const onRefresh = async () => {
-    console.log('[WalletScreen] Pull-to-refresh wallet triggered');
-    setRefreshing(true);
-    await fetchWallet();
-    setRefreshing(false);
-  };
+  useEffect(() => { fetchWallet(); }, []);
+  const onRefresh = async () => { setRefreshing(true); await fetchWallet(); setRefreshing(false); };
 
   if (loading && !refreshing) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#2563eb" />
-      </View>
-    );
+    return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#FDB813" /></View>;
   }
 
   return (
-    <View style={styles.container}>
-      <SafeAreaView edges={['top']} style={{ backgroundColor: '#fff' }}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Wallet</Text>
-        </View>
-      </SafeAreaView>
-
-      <ScrollView 
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />}
-      >
-        {/* Balance Cards */}
-        <View style={styles.balanceContainer}>
-          <View style={[styles.mainCard, data.balance < 0 ? styles.negativeCard : null]}>
-            <View style={styles.cardHeader}>
-              <Wallet color={data.balance < 0 ? "#dc2626" : "#2563eb"} size={24} weight="fill" />
-              <Text style={styles.cardLabel}>CURRENT BALANCE</Text>
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <CurvedHeader title="My Wallet" />
+      <View style={styles.container}>
+        <ScrollView 
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FDB813']} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Balance Card */}
+          <View style={styles.balanceCard}>
+            <View style={styles.balanceCardHeader}>
+              <Wallet color="#FDB813" size={24} weight="fill" />
+              <Text style={styles.balanceLabel}>CURRENT BALANCE</Text>
             </View>
-            <Text style={[styles.balanceAmount, data.balance < 0 ? styles.negativeText : null]}>
+            <Text style={[styles.balanceAmount, data.balance < 0 && { color: '#fca5a5' }]}>
               ₹{(data.balance || 0).toLocaleString()}
             </Text>
-          </View>
-          
-          <View style={styles.subCardsContainer}>
-            <View style={styles.subCard}>
-              <View style={styles.cardHeader}>
-                <ArrowCircleUp color="#10b981" size={16} weight="fill" />
-                <Text style={styles.cardLabel}>TOTAL EARNED</Text>
+            <View style={styles.balanceSubRow}>
+              <View style={styles.balanceSubItem}>
+                <ArrowCircleUp color="#4ade80" size={16} weight="fill" />
+                <Text style={styles.balanceSubLabel}>Earned</Text>
+                <Text style={[styles.balanceSubValue, { color: '#4ade80' }]}>₹{(data.totalEarned || 0).toLocaleString()}</Text>
               </View>
-              <Text style={[styles.subAmount, { color: '#10b981' }]}>₹{(data.totalEarned || 0).toLocaleString()}</Text>
-            </View>
-            <View style={styles.subCard}>
-              <View style={styles.cardHeader}>
-                <ArrowCircleDown color="#ef4444" size={16} weight="fill" />
-                <Text style={styles.cardLabel}>TOTAL PAID</Text>
+              <View style={styles.balanceSubDivider} />
+              <View style={styles.balanceSubItem}>
+                <ArrowCircleDown color="#f87171" size={16} weight="fill" />
+                <Text style={styles.balanceSubLabel}>Paid</Text>
+                <Text style={[styles.balanceSubValue, { color: '#f87171' }]}>₹{(data.totalPaid || 0).toLocaleString()}</Text>
               </View>
-              <Text style={[styles.subAmount, { color: '#ef4444' }]}>₹{(data.totalPaid || 0).toLocaleString()}</Text>
             </View>
           </View>
-        </View>
 
-        {/* Transaction History */}
-        <Text style={styles.sectionTitle}>Transaction History</Text>
-        <View style={styles.historyContainer}>
-          {data.entries && data.entries.length > 0 ? (
-            data.entries.map((entry, index) => (
-              <View key={entry.id} style={[styles.transactionItem, index === data.entries.length - 1 && { borderBottomWidth: 0 }]}>
-                <View style={[styles.txIcon, entry.type === 'credit' ? styles.txIconCredit : styles.txIconDebit]}>
-                  {entry.type === 'credit' 
-                    ? <ArrowCircleUp color="#059669" size={20} weight="bold" />
-                    : <ArrowCircleDown color="#dc2626" size={20} weight="bold" />}
+          {/* Transaction History */}
+          <Text style={styles.sectionTitle}>TRANSACTION HISTORY</Text>
+          <View style={styles.historyContainer}>
+            {data.entries && data.entries.length > 0 ? (
+              data.entries.map((entry, index) => (
+                <View key={entry.id} style={[styles.txItem, index === data.entries.length - 1 && { borderBottomWidth: 0 }]}>
+                  <View style={[styles.txIcon, entry.type === 'credit' ? styles.txIconCredit : styles.txIconDebit]}>
+                    {entry.type === 'credit' 
+                      ? <ArrowCircleUp color="#059669" size={20} weight="fill" />
+                      : <ArrowCircleDown color="#dc2626" size={20} weight="fill" />}
+                  </View>
+                  <View style={styles.txInfo}>
+                    <Text style={styles.txTitle} numberOfLines={1}>{entry.description || entry.type.toUpperCase()}</Text>
+                    <Text style={styles.txDate}>{new Date(entry.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' })}</Text>
+                    {entry.total_km > 0 && <Text style={styles.txMeta}>{entry.total_km}km • {entry.fuel_litres}L • ₹{entry.fuel_rate}/L</Text>}
+                  </View>
+                  <View style={styles.txAmountContainer}>
+                    <Text style={[styles.txAmount, entry.type === 'credit' ? { color: '#059669' } : { color: '#dc2626' }]}>
+                      {entry.type === 'credit' ? '+' : '-'}₹{entry.amount.toLocaleString()}
+                    </Text>
+                    <Text style={styles.txBalance}>Bal: ₹{entry.balance_after.toLocaleString()}</Text>
+                    {entry.paid_by_admin === 1 && (
+                      <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>PAID</Text></View>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.txInfo}>
-                  <Text style={styles.txTitle} numberOfLines={1}>{entry.description || entry.type.toUpperCase()}</Text>
-                  <Text style={styles.txDate}>{new Date(entry.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' })}</Text>
-                  {entry.total_km > 0 && (
-                    <Text style={styles.txMeta}>{entry.total_km}km • {entry.fuel_litres}L • ₹{entry.fuel_rate}/L</Text>
-                  )}
-                </View>
-                <View style={styles.txAmountContainer}>
-                  <Text style={[styles.txAmount, entry.type === 'credit' ? styles.txAmountCredit : styles.txAmountDebit]}>
-                    {entry.type === 'credit' ? '+' : '-'}₹{entry.amount.toLocaleString()}
-                  </Text>
-                  <Text style={styles.txBalance}>Bal: ₹{entry.balance_after.toLocaleString()}</Text>
-                  {entry.paid_by_admin === 1 && (
-                    <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>PAID</Text></View>
-                  )}
-                </View>
+              ))
+            ) : (
+              <View style={styles.emptyCard}>
+                <Receipt color="#cbd5e1" size={40} weight="fill" />
+                <Text style={styles.emptyText}>No transactions yet</Text>
               </View>
-            ))
-          ) : (
-            <View style={styles.emptyCard}>
-              <Receipt color="#d1d5db" size={32} weight="fill" />
-              <Text style={styles.emptyText}>No transactions yet</Text>
-            </View>
-          )}
-        </View>
-      </ScrollView>
-    </View>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' },
-  header: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  content: { padding: 20, paddingBottom: 40 },
+  safeArea: { flex: 1, backgroundColor: '#0A1931' },
+  container: { flex: 1, backgroundColor: '#f4f6f9' },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f6f9' },
+  content: { padding: 16, paddingBottom: 20 },
   
-  balanceContainer: { marginBottom: 24 },
-  mainCard: { backgroundColor: '#fff', borderRadius: 10, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: '#bfdbfe' },
-  negativeCard: { borderColor: '#fecaca' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  cardLabel: { fontSize: 11, fontWeight: 'bold', color: '#6b7280', letterSpacing: 0.5 },
-  balanceAmount: { fontSize: 32, fontWeight: '900', color: '#1d4ed8' },
-  negativeText: { color: '#b91c1c' },
+  // Balance Card
+  balanceCard: { backgroundColor: '#0A1931', borderRadius: 16, padding: 20, marginBottom: 20, elevation: 4, shadowColor: '#0A1931', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8 },
+  balanceCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  balanceLabel: { fontSize: 11, fontWeight: '800', color: '#94a3b8', letterSpacing: 1 },
+  balanceAmount: { fontSize: 36, fontWeight: '900', color: '#fff', marginBottom: 16 },
+  balanceSubRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: 12 },
+  balanceSubItem: { flex: 1, alignItems: 'center', gap: 4 },
+  balanceSubDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
+  balanceSubLabel: { fontSize: 10, color: '#94a3b8', fontWeight: '600' },
+  balanceSubValue: { fontSize: 16, fontWeight: '900' },
   
-  subCardsContainer: { flexDirection: 'row', gap: 12 },
-  subCard: { flex: 1, backgroundColor: '#fff', borderRadius: 10, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
-  subAmount: { fontSize: 18, fontWeight: '800' },
+  sectionTitle: { fontSize: 11, fontWeight: '800', color: '#64748b', marginBottom: 10, letterSpacing: 1 },
   
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#6b7280', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5, marginLeft: 4 },
-  historyContainer: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' },
-  transactionItem: { flexDirection: 'row', padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  txIcon: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  txIconCredit: { backgroundColor: '#d1fae5' },
-  txIconDebit: { backgroundColor: '#fee2e2' },
+  historyContainer: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
+  txItem: { flexDirection: 'row', padding: 14, borderBottomWidth: 1, borderBottomColor: '#f4f6f9' },
+  txIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  txIconCredit: { backgroundColor: '#ecfdf5' },
+  txIconDebit: { backgroundColor: '#fef2f2' },
   txInfo: { flex: 1, justifyContent: 'center' },
-  txTitle: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 2 },
-  txDate: { fontSize: 12, color: '#6b7280' },
-  txMeta: { fontSize: 10, color: '#9ca3af', marginTop: 4, fontWeight: '500' },
+  txTitle: { fontSize: 13, fontWeight: '800', color: '#0f172a', marginBottom: 2 },
+  txDate: { fontSize: 11, color: '#64748b' },
+  txMeta: { fontSize: 10, color: '#94a3b8', marginTop: 3, fontWeight: '600' },
   txAmountContainer: { alignItems: 'flex-end', justifyContent: 'center', paddingLeft: 8 },
-  txAmount: { fontSize: 15, fontWeight: 'bold', marginBottom: 2 },
-  txAmountCredit: { color: '#059669' },
-  txAmountDebit: { color: '#dc2626' },
-  txBalance: { fontSize: 10, color: '#9ca3af' },
-  paidBadge: { backgroundColor: '#d1fae5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 4, borderWidth: 1, borderColor: '#a7f3d0' },
-  paidBadgeText: { fontSize: 9, fontWeight: 'bold', color: '#047857' },
+  txAmount: { fontSize: 15, fontWeight: '900', marginBottom: 2 },
+  txBalance: { fontSize: 10, color: '#94a3b8', fontWeight: '500' },
+  paidBadge: { backgroundColor: '#dcfce7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 4 },
+  paidBadgeText: { fontSize: 9, fontWeight: '800', color: '#047857' },
   
   emptyCard: { padding: 40, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { marginTop: 12, fontSize: 14, color: '#6b7280' },
+  emptyText: { marginTop: 12, fontSize: 14, color: '#64748b', fontWeight: '600' },
 });
