@@ -1,11 +1,43 @@
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
 import api from '../api/axios';
 import { AuthContext } from './AuthContext';
 
 export const LocationContext = createContext();
 
 const LOCATION_TASK_NAME = 'BACKGROUND_LOCATION_TASK';
+
+TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+  if (error) {
+    console.error('[BackgroundTask] Error:', error.message);
+    return;
+  }
+  if (data) {
+    const { locations } = data;
+    const location = locations[0];
+    
+    // Ignore highly inaccurate points (GPS jitter / cellular triangulation)
+    if (location.coords.accuracy > 30) {
+      console.log('[BackgroundTask] Ignored inaccurate location. Accuracy:', location.coords.accuracy);
+      return;
+    }
+
+    console.log('[BackgroundTask] Received location update:', location.coords.latitude, location.coords.longitude, 'Speed:', location.coords.speed);
+    
+    try {
+      const response = await api.post('/location', {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        speed: location.coords.speed,
+        heading: location.coords.heading,
+      });
+      console.log('[BackgroundTask] Location synced successfully:', response.data.message);
+    } catch (err) {
+      console.log('[BackgroundTask] Location sync failed:', err?.response?.data?.message || err.message);
+    }
+  }
+});
 
 export const LocationProvider = ({ children }) => {
   const { user, driver } = useContext(AuthContext);
@@ -55,31 +87,29 @@ export const LocationProvider = ({ children }) => {
         subscriptionRef.current = null;
       }
 
-      console.log('[LocationContext] Attaching watchPositionAsync listener (5s interval)');
+      console.log('[LocationContext] Starting background location updates...');
+      await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 1000,
+        distanceInterval: 1,
+        foregroundService: {
+          notificationTitle: 'Live Tracking Active',
+          notificationBody: 'Location is being shared with parents.',
+          notificationColor: '#2563eb',
+        },
+        showsBackgroundLocationIndicator: true,
+      });
+
+      console.log('[LocationContext] Attaching watchPositionAsync listener for UI updates');
       const sub = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 5000,
-          distanceInterval: 10,
+          accuracy: Location.Accuracy.BestForNavigation,
+          timeInterval: 1000,
+          distanceInterval: 1,
         },
-        async (location) => {
-          console.log('[LocationContext] Received location update:', location.coords.latitude, location.coords.longitude, 'Speed:', location.coords.speed);
-          setCurrentLocation(location);
-          
-          // Sync location to backend
-          if (job) {
-            try {
-              console.log('[LocationContext] Syncing location to backend...');
-              const response = await api.post('/location', {
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-                speed: location.coords.speed,
-                heading: location.coords.heading,
-              });
-              console.log('[LocationContext] Location synced successfully:', response.data.message);
-            } catch (err) {
-              console.log('[LocationContext] Location sync failed:', err.response?.data?.message || err.message);
-            }
+        (location) => {
+          if (location.coords.accuracy <= 30) {
+            setCurrentLocation(location);
           }
         }
       );
@@ -97,6 +127,16 @@ export const LocationProvider = ({ children }) => {
       console.log('[LocationContext] Removing watchPositionAsync listener');
       subscriptionRef.current.remove();
       subscriptionRef.current = null;
+    }
+    
+    try {
+      const hasTask = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
+      if (hasTask) {
+        console.log('[LocationContext] Stopping background location updates');
+        await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+      }
+    } catch (e) {
+      console.log('[LocationContext] Error stopping background updates:', e);
     }
   };
 
