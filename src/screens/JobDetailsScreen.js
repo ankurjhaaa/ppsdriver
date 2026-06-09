@@ -8,6 +8,37 @@ import CurvedHeader from '../components/CurvedHeader';
 
 const { width } = Dimensions.get('window');
 
+function decodePolyline(encoded) {
+  if (!encoded) return [];
+  let points = [];
+  let index = 0, len = encoded.length;
+  let lat = 0, lng = 0;
+
+  while (index < len) {
+    let b, shift = 0, result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lng += dlng;
+
+    points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
+  }
+  return points;
+}
+
 export default function JobDetailsScreen({ route, navigation }) {
   const { jobId } = route.params;
   const [loading, setLoading] = useState(true);
@@ -32,8 +63,12 @@ export default function JobDetailsScreen({ route, navigation }) {
   }, [loading, locations]);
 
   const fitMapToRoute = () => {
-    const coords = [];
-    locations.forEach(loc => coords.push({ latitude: parseFloat(loc.latitude), longitude: parseFloat(loc.longitude) }));
+    let coords = [];
+    if (job?.route_polyline) {
+      coords = decodePolyline(job.route_polyline);
+    } else {
+      locations.forEach(loc => coords.push({ latitude: parseFloat(loc.latitude), longitude: parseFloat(loc.longitude) }));
+    }
     if (job?.start_lat && job?.start_lng) coords.push({ latitude: parseFloat(job.start_lat), longitude: parseFloat(job.start_lng) });
     if (job?.end_lat && job?.end_lng) coords.push({ latitude: parseFloat(job.end_lat), longitude: parseFloat(job.end_lng) });
     if (coords.length > 0 && mapRef.current) {
@@ -75,8 +110,12 @@ export default function JobDetailsScreen({ route, navigation }) {
               <Marker key={drop.id} coordinate={{ latitude: parseFloat(drop.drop_lat), longitude: parseFloat(drop.drop_lng) }}
                 title={`${drop.student?.user?.name || 'Student'}`} pinColor="blue" />
             ) : null)}
-            {locations.length > 1 && (
-              <Polyline coordinates={locations.map(l => ({ latitude: parseFloat(l.latitude), longitude: parseFloat(l.longitude) }))} strokeColor="#0A58CA" strokeWidth={4} />
+            {job.route_polyline ? (
+              <Polyline coordinates={decodePolyline(job.route_polyline)} strokeColor="#0A58CA" strokeWidth={4} />
+            ) : (
+              locations.length > 1 && (
+                <Polyline coordinates={locations.map(l => ({ latitude: parseFloat(l.latitude), longitude: parseFloat(l.longitude) }))} strokeColor="#0A58CA" strokeWidth={4} />
+              )
             )}
           </MapView>
           <TouchableOpacity style={styles.refitBtn} onPress={fitMapToRoute} activeOpacity={0.85}>
