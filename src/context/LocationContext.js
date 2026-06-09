@@ -8,6 +8,28 @@ export const LocationContext = createContext();
 
 const LOCATION_TASK_NAME = 'BACKGROUND_LOCATION_TASK';
 
+// Module-level variables to hold accumulated path and throttle sync
+let routeCoordinates = [];
+let lastSyncTime = 0;
+
+// Function to calculate distance between two coordinates in meters (Haversine formula)
+function getDistanceInMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Radius of the earth in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+export const getAndClearRouteCoordinates = () => {
+  const data = [...routeCoordinates];
+  routeCoordinates = []; // Reset for next job
+  return data;
+};
+
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   if (error) {
     console.error('[BackgroundTask] Error:', error.message);
@@ -23,18 +45,59 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       return;
     }
 
-    console.log('[BackgroundTask] Received location update:', location.coords.latitude, location.coords.longitude, 'Speed:', location.coords.speed);
-    
-    try {
-      const response = await api.post('/location', {
+    let validLat = location.coords.latitude;
+    let validLng = location.coords.longitude;
+    let validSpeed = location.coords.speed > 0.5 ? location.coords.speed : 0; // Filter micro-speeds when stopped
+
+    // Filter out stationary GPS drift (jitter)
+    // Only record if we've moved more than 5 meters from the last recorded point
+    if (routeCoordinates.length > 0) {
+      const lastPoint = routeCoordinates[routeCoordinates.length - 1];
+      const distance = getDistanceInMeters(
+        lastPoint.latitude, lastPoint.longitude,
+        location.coords.latitude, location.coords.longitude
+      );
+      
+      if (distance < 5) {
+        console.log(`[BackgroundTask] Ignored stationary drift (Distance: ${distance.toFixed(2)}m)`);
+        // Use the last valid point for live ping to prevent marker bouncing
+        validLat = lastPoint.latitude;
+        validLng = lastPoint.longitude;
+        validSpeed = 0;
+      } else {
+        // Accumulate locally
+        routeCoordinates.push({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          timestamp: location.timestamp
+        });
+      }
+    } else {
+      // First point
+      routeCoordinates.push({
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-        speed: location.coords.speed,
-        heading: location.coords.heading,
+        timestamp: location.timestamp
       });
-      console.log('[BackgroundTask] Location synced successfully:', response.data.message);
-    } catch (err) {
-      console.log('[BackgroundTask] Location sync failed:', err?.response?.data?.message || err.message);
+    }
+
+    // Throttle server ping to every 5 seconds
+    const now = Date.now();
+    if (now - lastSyncTime > 5000) {
+      lastSyncTime = now;
+      console.log('[BackgroundTask] Pinging live location to server...', validLat, validLng);
+      
+      try {
+        const response = await api.post('/location', {
+          latitude: validLat,
+          longitude: validLng,
+          speed: validSpeed,
+          heading: location.coords.heading,
+        });
+        console.log('[BackgroundTask] Location synced successfully:', response.data.message);
+      } catch (err) {
+        console.log('[BackgroundTask] Location sync failed:', err?.response?.data?.message || err.message);
+      }
     }
   }
 });
@@ -145,6 +208,7 @@ export const LocationProvider = ({ children }) => {
       isTracking, 
       currentLocation, 
       currentJob, 
+      setCurrentJob,
       startTracking, 
       stopTracking,
       errorMsg

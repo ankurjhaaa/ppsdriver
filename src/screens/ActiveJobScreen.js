@@ -1,14 +1,14 @@
 import React, { useContext, useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, TextInput, Modal, TouchableWithoutFeedback, Animated } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle, MapPin, MagnifyingGlass, Check, GasPump, Clock, NavigationArrow, Users } from 'phosphor-react-native';
-import { LocationContext } from '../context/LocationContext';
+import { LocationContext, getAndClearRouteCoordinates } from '../context/LocationContext';
 import api from '../api/axios';
 import CurvedHeader from '../components/CurvedHeader';
 
 export default function ActiveJobScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentJob, currentLocation, stopTracking } = useContext(LocationContext);
+  const { currentJob, setCurrentJob, currentLocation, stopTracking } = useContext(LocationContext);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
@@ -16,101 +16,173 @@ export default function ActiveJobScreen({ navigation }) {
   const [activeActions, setActiveActions] = useState(
     currentJob?.actions?.map(a => a.student_id) || []
   );
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
+  const [summaryModalVisible, setSummaryModalVisible] = useState(false);
+  const [tripSummary, setTripSummary] = useState({ distance: 0, credit: 0 });
+  const [cachedJob, setCachedJob] = useState(currentJob);
+  const [isScreenReady, setIsScreenReady] = useState(false);
+
+  const confirmModalY = React.useRef(new Animated.Value(600)).current;
+  const summaryModalY = React.useRef(new Animated.Value(600)).current;
+
+  const openConfirmModal = () => { setConfirmModalVisible(true); confirmModalY.setValue(600); };
+  const startConfirmSlideUp = () => { Animated.timing(confirmModalY, { toValue: 0, duration: 300, useNativeDriver: true }).start(); };
+  const closeConfirmModal = (callback) => { Animated.timing(confirmModalY, { toValue: 600, duration: 250, useNativeDriver: true }).start(() => { setConfirmModalVisible(false); if (typeof callback === 'function') callback(); }); };
+
+  const openSummaryModal = () => { setSummaryModalVisible(true); summaryModalY.setValue(600); };
+  const startSummarySlideUp = () => { Animated.timing(summaryModalY, { toValue: 0, duration: 300, useNativeDriver: true }).start(); };
+  const closeSummaryModal = (callback) => { Animated.timing(summaryModalY, { toValue: 600, duration: 250, useNativeDriver: true }).start(() => { setSummaryModalVisible(false); if (typeof callback === 'function') callback(); }); };
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsScreenReady(true), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (currentJob) setCachedJob(currentJob);
+  }, [currentJob]);
 
   useEffect(() => {
     const interval = setInterval(() => setPulse(p => !p), 800);
     return () => clearInterval(interval);
   }, []);
 
+  const displayJob = currentJob || cachedJob;
+
   useEffect(() => {
-    if (currentJob?.actions) setActiveActions(currentJob.actions.map(a => a.student_id));
-  }, [currentJob]);
+    if (displayJob?.actions) setActiveActions(displayJob.actions.map(a => a.student_id));
+  }, [displayJob]);
 
   const performAction = async (studentId) => {
-    const actionType = currentJob?.trip_direction === 'to_school' ? 'pickup' : 'drop';
+    const actionType = displayJob?.trip_direction === 'to_school' ? 'pickup' : 'drop';
     try {
       const lat = currentLocation?.coords?.latitude || null;
       const lng = currentLocation?.coords?.longitude || null;
       await api.post('/student-action', { student_id: studentId, action_type: actionType, latitude: lat, longitude: lng });
       setActiveActions(prev => [...prev, studentId]);
+      
+      // Update global context so state persists if user navigates away and back
+      if (setCurrentJob) {
+        setCurrentJob(prev => {
+          if (!prev) return prev;
+          const newAction = { student_id: studentId, action_type: actionType, action_at: new Date().toISOString() };
+          return { ...prev, actions: [...(prev.actions || []), newAction] };
+        });
+      }
     } catch (e) {
       Alert.alert('Error', e.response?.data?.message || `Failed to record ${actionType}`);
     }
   };
 
-  const endJob = async () => {
-    Alert.alert('Complete Trip', 'Are you sure you want to complete this trip?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Complete', style: 'destructive', onPress: async () => {
-        setIsLoading(true);
-        try {
-          const lat = currentLocation?.coords?.latitude || 25.7771;
-          const lng = currentLocation?.coords?.longitude || 87.4753;
-          const response = await api.post('/job/end', { job_id: currentJob?.id, latitude: lat, longitude: lng });
-          stopTracking();
-          const distance = response.data.summary?.total_km || response.data.distance || 0;
-          const credit = response.data.summary?.wallet_credited || response.data.wallet_credit || 0;
-          Alert.alert('Trip Completed', `Distance: ${distance} km\nEarned: ₹${credit}`, [
-            { text: 'OK', onPress: () => navigation.navigate('MainTabs') }
-          ]);
-        } catch (e) { Alert.alert('Error', e.response?.data?.message || 'Failed to end job'); }
-        finally { setIsLoading(false); }
-      }}
-    ]);
+  const confirmEndJob = () => {
+    if (!isScreenReady) return;
+    openConfirmModal();
   };
 
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#FDB813" />
-        <Text style={styles.loadingText}>Completing Trip & Updating Wallet...</Text>
-      </SafeAreaView>
-    );
-  }
+  const processEndJob = async () => {
+    closeConfirmModal(async () => {
+      setIsLoading(true);
+      try {
+        let lat = currentLocation?.coords?.latitude;
+        let lng = currentLocation?.coords?.longitude;
+      
+      let routeCoords = getAndClearRouteCoordinates();
 
-  if (!currentJob) {
-    return (
-      <SafeAreaView edges={['top']} style={styles.safeArea}>
-        <CurvedHeader title="Active Trip" showBack onBack={() => navigation.navigate('MainTabs')} />
-        <View style={styles.emptyContainer}>
-          <NavigationArrow color="#cbd5e1" size={48} weight="fill" />
-          <Text style={styles.emptyTitle}>No active job found</Text>
-          <Text style={styles.emptyText}>Start a new trip from the home page.</Text>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.navigate('MainTabs')}>
-            <Text style={styles.backBtnText}>Go to Home</Text>
-          </TouchableOpacity>
+      // If we don't have a UI location yet, try to use the last known route coordinate or fetch it
+      if (!lat || !lng) {
+        if (routeCoords.length > 0) {
+          lat = routeCoords[routeCoords.length - 1].latitude;
+          lng = routeCoords[routeCoords.length - 1].longitude;
+        } else {
+          try {
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            lat = loc.coords.latitude;
+            lng = loc.coords.longitude;
+          } catch (e) {
+            lat = 25.7771; // Absolute fallback
+            lng = 87.4753;
+          }
+        }
+      }
+      
+      // Ensure at least 2 points exist so the backend can generate and save a polyline
+      if (routeCoords.length === 1) {
+        routeCoords.push({ latitude: lat, longitude: lng, timestamp: Date.now() });
+      } else if (routeCoords.length === 0) {
+        routeCoords.push({ latitude: lat, longitude: lng, timestamp: Date.now() - 1000 });
+        routeCoords.push({ latitude: lat, longitude: lng, timestamp: Date.now() });
+      }
+      
+      const response = await api.post('/job/end', { 
+        job_id: displayJob?.id, 
+        latitude: lat, 
+        longitude: lng,
+        route_coordinates: routeCoords
+      });
+      stopTracking();
+      const distance = response.data.summary?.total_km || response.data.distance || 0;
+      const credit = response.data.summary?.wallet_credited || response.data.wallet_credit || 0;
+      
+      setTripSummary({ distance, credit });
+      setIsLoading(false);
+      openSummaryModal();
+    } catch (e) {
+      setIsLoading(false);
+      Alert.alert('Error', e.response?.data?.message || 'Failed to end job');
+    }
+    });
+  };
+
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#FDB813" />
+          <Text style={styles.loadingText}>Completing Trip & Updating Wallet...</Text>
         </View>
-      </SafeAreaView>
-    );
-  }
+      );
+    }
 
-  const studentsList = currentJob.route?.students || [];
-  const filteredStudents = studentsList.filter(st => {
-    const name = (st.student?.user?.name || '').toLowerCase();
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = name.includes(query);
-    const hasAction = activeActions.includes(st.student_id);
-    if (activeTab === 'pending') return matchesSearch && !hasAction;
-    if (activeTab === 'done') return matchesSearch && hasAction;
-    return matchesSearch;
-  });
+    if (!displayJob) {
+      return (
+        <View style={{ flex: 1 }}>
+          <CurvedHeader title="Active Trip" showBack onBack={() => navigation.navigate('MainTabs')} />
+          <View style={styles.emptyContainer}>
+            <NavigationArrow color="#cbd5e1" size={48} weight="fill" />
+            <Text style={styles.emptyTitle}>No active job found</Text>
+            <Text style={styles.emptyText}>Start a new trip from the home page.</Text>
+            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.navigate('MainTabs')}>
+              <Text style={styles.backBtnText}>Go to Home</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
 
-  const pendingCount = studentsList.filter(st => !activeActions.includes(st.student_id)).length;
-  const actionCount = activeActions.length;
-  const isToSchool = currentJob?.trip_direction === 'to_school';
+    const studentsList = displayJob.route?.students || [];
+    const filteredStudents = studentsList.filter(st => {
+      const name = (st.student?.user?.name || '').toLowerCase();
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = name.includes(query);
+      const hasAction = activeActions.includes(st.student_id);
+      if (activeTab === 'pending') return matchesSearch && !hasAction;
+      if (activeTab === 'done') return matchesSearch && hasAction;
+      return matchesSearch;
+    });
 
-  return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
-      <CurvedHeader 
-        title={currentJob.job_type === 'route' ? (isToSchool ? 'To School' : 'From School') : 'Ad-hoc Trip'}
-        subtitle={currentJob.route?.route_name || currentJob.reason || 'Active Trip'}
-        showBack onBack={() => navigation.navigate('MainTabs')}
-      />
+    const pendingCount = studentsList.filter(st => !activeActions.includes(st.student_id)).length;
+    const actionCount = activeActions.length;
+    const isToSchool = displayJob?.trip_direction === 'to_school';
 
+    return (
       <View style={styles.container}>
+        <CurvedHeader 
+          title={displayJob.job_type === 'route' ? (isToSchool ? 'To School' : 'From School') : 'Ad-hoc Trip'}
+          subtitle={displayJob.route?.route_name || displayJob.reason || 'Active Trip'}
+          showBack onBack={() => navigation.navigate('MainTabs')}
+        />
+
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          
-          {/* Live Tracking Banner */}
           <View style={styles.liveBanner}>
             <View style={styles.liveBannerLeft}>
               <View style={[styles.pulseDot, { opacity: pulse ? 1 : 0.3 }]} />
@@ -119,19 +191,18 @@ export default function ActiveJobScreen({ navigation }) {
             <Text style={styles.liveBannerSub}>GPS streaming every 1s</Text>
           </View>
 
-          {/* Trip Info Card */}
           <View style={styles.tripInfoCard}>
             <View style={styles.tripInfoRow}>
               <View style={styles.tripInfoItem}>
                 <MapPin color="#3b82f6" size={16} weight="fill" />
                 <Text style={styles.tripInfoLabel}>ROUTE</Text>
-                <Text style={styles.tripInfoValue}>{currentJob.route?.route_name || currentJob.reason || 'Custom Trip'}</Text>
+                <Text style={styles.tripInfoValue}>{displayJob.route?.route_name || displayJob.reason || 'Custom Trip'}</Text>
               </View>
               <View style={styles.tripInfoDivider} />
               <View style={styles.tripInfoItem}>
                 <GasPump color="#FDB813" size={16} weight="fill" />
                 <Text style={styles.tripInfoLabel}>VEHICLE</Text>
-                <Text style={styles.tripInfoValue}>{currentJob.vehicle?.vehicle_number || 'N/A'}</Text>
+                <Text style={styles.tripInfoValue}>{displayJob.vehicle?.vehicle_number || 'N/A'}</Text>
               </View>
               <View style={styles.tripInfoDivider} />
               <View style={styles.tripInfoItem}>
@@ -142,8 +213,7 @@ export default function ActiveJobScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Student Management Board */}
-          {currentJob.job_type === 'route' && (
+          {displayJob.job_type === 'route' && (
             <View style={styles.boardContainer}>
               <View style={styles.boardHeaderRow}>
                 <Text style={styles.boardTitle}>Students</Text>
@@ -152,13 +222,11 @@ export default function ActiveJobScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Search */}
               <View style={styles.searchContainer}>
                 <MagnifyingGlass color="#94a3b8" size={18} />
                 <TextInput style={styles.searchInput} placeholder="Search students..." placeholderTextColor="#94a3b8" value={searchQuery} onChangeText={setSearchQuery} />
               </View>
 
-              {/* Tabs */}
               <View style={styles.tabContainer}>
                 {[
                   { key: 'all', label: `All (${studentsList.length})` },
@@ -171,7 +239,6 @@ export default function ActiveJobScreen({ navigation }) {
                 ))}
               </View>
 
-              {/* Student List */}
               {filteredStudents.map((st, i) => {
                 const hasAction = activeActions.includes(st.student_id);
                 return (
@@ -206,18 +273,75 @@ export default function ActiveJobScreen({ navigation }) {
           )}
         </ScrollView>
 
-        {/* Footer */}
         <View style={[styles.footer, { paddingBottom: Math.max(20, insets.bottom + 8) }]}>
-          <TouchableOpacity style={styles.endBtn} onPress={endJob} disabled={isLoading} activeOpacity={0.85}>
-            {isLoading ? <ActivityIndicator color="#fff" /> : (
-              <>
-                <CheckCircle color="#fff" size={20} weight="bold" />
-                <Text style={styles.endBtnText}>Complete Trip</Text>
-              </>
-            )}
+          <TouchableOpacity style={styles.endBtn} onPress={confirmEndJob} disabled={isLoading || !isScreenReady} activeOpacity={0.85}>
+            <CheckCircle color="#fff" size={20} weight="bold" />
+            <Text style={styles.endBtnText}>Complete Trip</Text>
           </TouchableOpacity>
         </View>
       </View>
+    );
+  };
+
+  return (
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
+      {renderContent()}
+
+      <Modal visible={confirmModalVisible} transparent animationType="fade" onRequestClose={() => closeConfirmModal()} onShow={startConfirmSlideUp}>
+        <TouchableOpacity activeOpacity={1} style={styles.modalOverlay} onPress={() => closeConfirmModal()}>
+          <TouchableWithoutFeedback>
+            <Animated.View style={[styles.modalContent, { transform: [{ translateY: confirmModalY }] }]}>
+              <View style={styles.dragHandle} />
+              <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                <CheckCircle color="#ef4444" size={28} weight="fill" />
+              </View>
+              <Text style={styles.modalTitle}>Complete Trip</Text>
+              <Text style={styles.modalSub}>Are you sure you want to end this trip? You won't be able to undo this action.</Text>
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => closeConfirmModal()}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalConfirmBtn} onPress={processEndJob}>
+                  <Text style={styles.modalConfirmText}>Complete</Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={summaryModalVisible} transparent animationType="fade" onRequestClose={() => closeSummaryModal()} onShow={startSummarySlideUp}>
+        <TouchableOpacity activeOpacity={1} style={styles.modalOverlay} onPress={() => closeSummaryModal(() => navigation.navigate('MainTabs'))}>
+          <TouchableWithoutFeedback>
+            <Animated.View style={[styles.modalContent, { transform: [{ translateY: summaryModalY }] }]}>
+              <View style={styles.dragHandle} />
+              <View style={styles.summaryTop}>
+                <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(5, 150, 105, 0.1)' }]}>
+                  <CheckCircle color="#059669" size={34} weight="fill" />
+                </View>
+                <Text style={styles.modalTitle}>Trip Completed!</Text>
+                <Text style={styles.modalSub}>Great job. Your wallet has been updated.</Text>
+              </View>
+
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>Distance</Text>
+                  <Text style={styles.summaryValue}>{tripSummary?.distance} <Text style={{ fontSize: 14 }}>km</Text></Text>
+                </View>
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>Earned</Text>
+                  <Text style={[styles.summaryValue, { color: '#059669' }]}>₹{tripSummary?.credit}</Text>
+                </View>
+              </View>
+              
+              <TouchableOpacity style={styles.modalHomeBtn} onPress={() => closeSummaryModal(() => navigation.navigate('MainTabs'))}>
+                <Text style={styles.modalHomeText}>Back to Home</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -225,44 +349,31 @@ export default function ActiveJobScreen({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#0A1931' },
   container: { flex: 1, backgroundColor: '#f4f6f9' },
-  
   scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 20 },
-
-  // Live Banner
   liveBanner: { backgroundColor: '#0A1931', borderRadius: 12, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   liveBannerLeft: { flexDirection: 'row', alignItems: 'center' },
   pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 8 },
   liveBannerTitle: { color: '#fff', fontSize: 13, fontWeight: '700' },
   liveBannerSub: { color: '#FDB813', fontSize: 11, fontWeight: '600' },
-
-  // Trip Info
   tripInfoCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 14, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
   tripInfoRow: { flexDirection: 'row', alignItems: 'flex-start' },
   tripInfoItem: { flex: 1, alignItems: 'center' },
   tripInfoDivider: { width: 1, backgroundColor: '#e2e8f0', height: '100%' },
   tripInfoLabel: { fontSize: 9, fontWeight: '800', color: '#64748b', letterSpacing: 0.5, marginTop: 6, marginBottom: 4 },
   tripInfoValue: { fontSize: 13, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
-
-  // Board
   boardContainer: { backgroundColor: '#fff', borderRadius: 12, padding: 16, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
   boardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   boardTitle: { fontSize: 16, fontWeight: '900', color: '#0f172a' },
   progressBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   progressText: { fontSize: 11, fontWeight: '700', color: '#1d4ed8' },
-
-  // Search
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4f6f9', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
   searchInput: { flex: 1, marginLeft: 8, fontSize: 13, color: '#0f172a', padding: 0 },
-
-  // Tabs
   tabContainer: { flexDirection: 'row', backgroundColor: '#f4f6f9', borderRadius: 8, padding: 3, marginBottom: 14 },
   tabButton: { flex: 1, paddingVertical: 7, borderRadius: 6, alignItems: 'center' },
   tabButtonActive: { backgroundColor: '#0A1931' },
   tabButtonText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
   tabButtonTextActive: { color: '#FDB813' },
-
-  // Student Cards
   studentCard: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#fff', borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: '#f1f5f9' },
   studentCardDone: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
   studentAvatar: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
@@ -273,21 +384,33 @@ const styles = StyleSheet.create({
   studentNameDone: { color: '#16a34a' },
   pickupRow: { flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 3 },
   pickupText: { fontSize: 10, color: '#94a3b8', fontWeight: '500' },
-
-  // Buttons
   actionBtn: { backgroundColor: '#0A1931', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   actionBtnText: { color: '#FDB813', fontSize: 11, fontWeight: '800' },
   doneBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#dcfce7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, gap: 4 },
   doneText: { color: '#059669', fontSize: 11, fontWeight: '800' },
-
   noResults: { padding: 20, alignItems: 'center' },
-  noResultsText: { fontSize: 13, color: '#94a3b8' },
-
-  // Footer
+  noResultsText: { fontSize: 13, color: '#94a3b8', fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(10, 25, 49, 0.65)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, width: '100%', alignItems: 'center', paddingBottom: 24 },
+  dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#e2e8f0', marginBottom: 16 },
+  modalIconWrap: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  modalTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginBottom: 6, textAlign: 'center' },
+  modalSub: { fontSize: 12, color: '#64748b', textAlign: 'center', lineHeight: 18, marginBottom: 20, paddingHorizontal: 10 },
+  modalButtons: { flexDirection: 'row', gap: 10, width: '100%' },
+  modalCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#f1f5f9', alignItems: 'center' },
+  modalCancelText: { fontSize: 14, fontWeight: '700', color: '#64748b' },
+  modalConfirmBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#ef4444', alignItems: 'center' },
+  modalConfirmText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  summaryTop: { alignItems: 'center', marginBottom: 16 },
+  summaryGrid: { flexDirection: 'row', gap: 10, width: '100%', marginBottom: 20 },
+  summaryCard: { flex: 1, backgroundColor: '#f8fafc', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+  summaryLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  summaryValue: { fontSize: 20, fontWeight: '900', color: '#0f172a' },
+  modalHomeBtn: { backgroundColor: '#0A1931', width: '100%', paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
+  modalHomeText: { color: '#fff', fontSize: 14, fontWeight: '800' },
   footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   endBtn: { backgroundColor: '#dc2626', borderRadius: 12, padding: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
   endBtnText: { color: '#fff', fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-
   // Empty
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#f4f6f9' },
   emptyTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a', marginTop: 16, marginBottom: 4 },

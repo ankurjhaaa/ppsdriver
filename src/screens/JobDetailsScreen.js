@@ -106,9 +106,9 @@ export default function JobDetailsScreen({ route, navigation }) {
             {job.status === 'completed' && job.end_lat && job.end_lng && (
               <Marker coordinate={{ latitude: parseFloat(job.end_lat), longitude: parseFloat(job.end_lng) }} title="End" pinColor="red" />
             )}
-            {job.drops && job.drops.map(drop => drop.drop_lat && drop.drop_lng ? (
-              <Marker key={drop.id} coordinate={{ latitude: parseFloat(drop.drop_lat), longitude: parseFloat(drop.drop_lng) }}
-                title={`${drop.student?.user?.name || 'Student'}`} pinColor="blue" />
+            {job.actions && job.actions.map(action => action.action_lat && action.action_lng ? (
+              <Marker key={action.id} coordinate={{ latitude: parseFloat(action.action_lat), longitude: parseFloat(action.action_lng) }}
+                title={`${action.student?.user?.name || 'Student'}`} pinColor="blue" />
             ) : null)}
             {job.route_polyline ? (
               <Polyline coordinates={decodePolyline(job.route_polyline)} strokeColor="#0A58CA" strokeWidth={4} />
@@ -119,7 +119,7 @@ export default function JobDetailsScreen({ route, navigation }) {
             )}
           </MapView>
           <TouchableOpacity style={styles.refitBtn} onPress={fitMapToRoute} activeOpacity={0.85}>
-            <Text style={styles.refitText}>Re-fit</Text>
+            <Text style={styles.refitText}>Recenter Map</Text>
           </TouchableOpacity>
         </View>
 
@@ -157,18 +157,18 @@ export default function JobDetailsScreen({ route, navigation }) {
 
             {job.job_type === 'route' && (
               <View style={styles.dropsSection}>
-                <Text style={styles.sectionTitle}>STUDENT DROPS ({job.drops?.length || 0})</Text>
-                {job.drops && job.drops.length > 0 ? job.drops.map(drop => (
-                  <View key={drop.id} style={styles.dropItem}>
-                    <View style={styles.dropAvatar}><Text style={styles.dropAvatarText}>{drop.student?.user?.name?.charAt(0) || 'S'}</Text></View>
+                <Text style={styles.sectionTitle}>STUDENT ACTIONS ({job.actions?.length || 0})</Text>
+                {job.actions && job.actions.length > 0 ? job.actions.map(action => (
+                  <View key={action.id} style={styles.dropItem}>
+                    <View style={styles.dropAvatar}><Text style={styles.dropAvatarText}>{action.student?.user?.name?.charAt(0) || 'S'}</Text></View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.dropName}>{drop.student?.user?.name}</Text>
-                      <Text style={styles.dropTime}>at {new Date(drop.dropped_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                      <Text style={styles.dropName}>{action.student?.user?.name}</Text>
+                      <Text style={styles.dropTime}>{action.action_type === 'pickup' ? 'Picked up' : 'Dropped'} at {new Date(action.action_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                     </View>
                     <CheckCircle size={18} color="#10b981" weight="fill" />
                   </View>
                 )) : (
-                  <View style={styles.noDrops}><Text style={styles.noDropsText}>No drops recorded</Text></View>
+                  <View style={styles.noDrops}><Text style={styles.noDropsText}>No actions recorded</Text></View>
                 )}
               </View>
             )}

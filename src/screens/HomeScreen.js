@@ -107,11 +107,31 @@ export default function HomeScreen({ navigation }) {
       setVerificationError(null);
 
       startTracking(response.data.job);
-      navigation.navigate('ActiveJob');
+      setTimeout(() => {
+        navigation.navigate('ActiveJob');
+      }, 150);
     } catch (e) {
       setVerificationError(e.response?.data?.message || 'Verification failed. Please try again.');
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const capturePhoto = async () => {
+    if (cameraRef.current && !capturedPhoto && !isVerifying) {
+      try {
+        const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.7 });
+        setCapturedPhoto(photo.base64);
+        proceedToStartJob(
+          pendingJobParams.route,
+          pendingJobParams.isManual,
+          pendingJobParams.reason,
+          pendingJobParams.tripDirection,
+          photo.base64
+        );
+      } catch (e) {
+        setVerificationError('Failed to capture photo. Try again.');
+      }
     }
   };
 
@@ -416,9 +436,10 @@ export default function HomeScreen({ navigation }) {
                 )
               )}
               {!capturedPhoto && (
-                <View style={styles.cameraOverlay}>
+                <TouchableOpacity style={styles.cameraOverlay} activeOpacity={1} onPress={capturePhoto}>
                   <View style={styles.faceOutline} />
-                </View>
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', position: 'absolute', bottom: 40, fontWeight: '700' }}>Tap anywhere to capture</Text>
+                </TouchableOpacity>
               )}
             </View>
             <View style={styles.cameraControls}>
@@ -452,23 +473,7 @@ export default function HomeScreen({ navigation }) {
                   <TouchableOpacity style={styles.cameraCancelBtn} onPress={() => { setShowFaceScan(false); setPendingJobParams(null); setCapturedPhoto(null); setVerificationError(null); }}>
                     <Text style={styles.cameraCancelText}>Cancel</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.cameraCaptureBtn} onPress={async () => {
-                    if (cameraRef.current) {
-                      try {
-                        const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.7 });
-                        setCapturedPhoto(photo.base64);
-                        proceedToStartJob(
-                          pendingJobParams.route,
-                          pendingJobParams.isManual,
-                          pendingJobParams.reason,
-                          pendingJobParams.tripDirection,
-                          photo.base64
-                        );
-                      } catch (e) {
-                        setVerificationError('Failed to capture photo. Try again.');
-                      }
-                    }
-                  }}>
+                  <TouchableOpacity style={styles.cameraCaptureBtn} onPress={capturePhoto}>
                     <View style={styles.cameraCaptureInner} />
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.cameraSwitchBtn} onPress={() => setCameraFacing(prev => prev === 'front' ? 'back' : 'front')}>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ClockCounterClockwise, MapPin, GasPump, NavigationArrow, CheckCircle, WarningCircle, CaretRight } from 'phosphor-react-native';
 import api from '../api/axios';
@@ -7,21 +7,46 @@ import CurvedHeader from '../components/CurvedHeader';
 
 export default function JobHistoryScreen({ navigation }) {
   const [jobs, setJobs] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (pageNum = 1) => {
+    if (pageNum === 1) setLoading(true);
+    else setLoadingMore(true);
+
     try {
-      const response = await api.get('/jobs/history');
-      setJobs(response.data.jobs || []);
+      const response = await api.get(`/jobs/history?page=${pageNum}`);
+      const newJobs = response.data.jobs?.data || [];
+      
+      if (pageNum === 1) {
+        setJobs(newJobs);
+      } else {
+        setJobs(prev => [...prev, ...newJobs]);
+      }
+      
+      setHasMore(response.data.jobs?.current_page < response.data.jobs?.last_page);
+      setPage(pageNum);
     } catch (e) { console.log('Error fetching jobs', e); }
-    finally { setLoading(false); }
+    finally { 
+      setLoading(false); 
+      setLoadingMore(false);
+      setRefreshing(false);
+    }
   };
 
-  useEffect(() => { fetchJobs(); }, []);
-  const onRefresh = async () => { setRefreshing(true); await fetchJobs(); setRefreshing(false); };
+  useEffect(() => { fetchJobs(1); }, []);
+  const onRefresh = () => { setRefreshing(true); fetchJobs(1); };
 
-  if (loading && !refreshing) {
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchJobs(page + 1);
+    }
+  };
+
+  if (loading && !refreshing && jobs.length === 0) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#FDB813" /></View>;
   }
 
@@ -34,72 +59,84 @@ export default function JobHistoryScreen({ navigation }) {
     }
   };
 
+  const renderItem = ({ item: job }) => {
+    const sc = getStatusConfig(job.status);
+    return (
+      <TouchableOpacity key={job.id} style={styles.jobCard} onPress={() => navigation.navigate('JobDetails', { jobId: job.id })} activeOpacity={0.8}>
+        <View style={styles.jobHeader}>
+          <Text style={styles.dateText}>
+            {new Date(job.started_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' })}
+          </Text>
+          <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
+            {sc.icon}
+            <Text style={[styles.statusText, { color: sc.color }]}>{sc.text}</Text>
+          </View>
+        </View>
+
+        <View style={styles.jobBody}>
+          <View style={styles.infoRow}>
+            <View style={styles.iconBox}><MapPin color="#0A58CA" size={16} weight="fill" /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.infoLabel}>Route</Text>
+              <Text style={styles.infoValue}>{job.route?.route_name || job.reason || 'Ad-hoc Trip'}</Text>
+            </View>
+          </View>
+          <View style={styles.infoRow}>
+            <View style={styles.iconBox}><GasPump color="#FDB813" size={16} weight="fill" /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.infoLabel}>Vehicle</Text>
+              <Text style={styles.infoValue}>{job.vehicle?.vehicle_number} • {job.vehicle?.fuel_type}</Text>
+            </View>
+          </View>
+        </View>
+
+        {job.status === 'completed' && (
+          <View style={styles.jobFooter}>
+            <View style={styles.metric}>
+              <Text style={styles.metricLabel}>DISTANCE</Text>
+              <Text style={styles.metricValue}>{job.total_distance_km || 0} <Text style={styles.metricUnit}>km</Text></Text>
+            </View>
+            <View style={styles.metricDivider} />
+            <View style={styles.metric}>
+              <Text style={styles.metricLabel}>EARNED</Text>
+              <Text style={[styles.metricValue, { color: '#059669' }]}>₹{job.fuel_cost ? job.fuel_cost.toLocaleString() : 0}</Text>
+            </View>
+            <CaretRight color="#cbd5e1" size={18} weight="bold" />
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderFooter = () => {
+    if (!loadingMore) return <View style={{ height: 20 }} />;
+    return <View style={styles.footerLoader}><ActivityIndicator size="small" color="#FDB813" /></View>;
+  };
+
+  const renderEmpty = () => (
+    <View style={styles.emptyCard}>
+      <ClockCounterClockwise color="#cbd5e1" size={48} weight="fill" />
+      <Text style={styles.emptyTitle}>No Trip History</Text>
+      <Text style={styles.emptyText}>Completed trips will appear here.</Text>
+    </View>
+  );
+
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
       <CurvedHeader title="Job History" />
       <View style={styles.container}>
-        <ScrollView 
+        <FlatList 
+          data={jobs}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={renderEmpty}
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FDB813']} />}
           showsVerticalScrollIndicator={false}
-        >
-          {jobs.length > 0 ? (
-            jobs.map((job) => {
-              const sc = getStatusConfig(job.status);
-              return (
-                <TouchableOpacity key={job.id} style={styles.jobCard} onPress={() => navigation.navigate('JobDetails', { jobId: job.id })} activeOpacity={0.8}>
-                  <View style={styles.jobHeader}>
-                    <Text style={styles.dateText}>
-                      {new Date(job.started_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' })}
-                    </Text>
-                    <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
-                      {sc.icon}
-                      <Text style={[styles.statusText, { color: sc.color }]}>{sc.text}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.jobBody}>
-                    <View style={styles.infoRow}>
-                      <View style={styles.iconBox}><MapPin color="#0A58CA" size={16} weight="fill" /></View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.infoLabel}>Route</Text>
-                        <Text style={styles.infoValue}>{job.route?.route_name || job.reason || 'Ad-hoc Trip'}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <View style={styles.iconBox}><GasPump color="#FDB813" size={16} weight="fill" /></View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.infoLabel}>Vehicle</Text>
-                        <Text style={styles.infoValue}>{job.vehicle?.vehicle_number} • {job.vehicle?.fuel_type}</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {job.status === 'completed' && (
-                    <View style={styles.jobFooter}>
-                      <View style={styles.metric}>
-                        <Text style={styles.metricLabel}>DISTANCE</Text>
-                        <Text style={styles.metricValue}>{job.total_distance_km || 0} <Text style={styles.metricUnit}>km</Text></Text>
-                      </View>
-                      <View style={styles.metricDivider} />
-                      <View style={styles.metric}>
-                        <Text style={styles.metricLabel}>EARNED</Text>
-                        <Text style={[styles.metricValue, { color: '#059669' }]}>₹{job.fuel_cost ? job.fuel_cost.toLocaleString() : 0}</Text>
-                      </View>
-                      <CaretRight color="#cbd5e1" size={18} weight="bold" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })
-          ) : (
-            <View style={styles.emptyCard}>
-              <ClockCounterClockwise color="#cbd5e1" size={48} weight="fill" />
-              <Text style={styles.emptyTitle}>No Trip History</Text>
-              <Text style={styles.emptyText}>Completed trips will appear here.</Text>
-            </View>
-          )}
-        </ScrollView>
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+        />
       </View>
     </SafeAreaView>
   );
@@ -110,6 +147,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f6f9' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f6f9' },
   content: { padding: 16, paddingBottom: 20 },
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
   
   jobCard: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 12, overflow: 'hidden', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
   jobHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: '#f4f6f9' },

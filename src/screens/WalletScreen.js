@@ -1,102 +1,145 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Wallet, ArrowCircleUp, ArrowCircleDown, Receipt } from 'phosphor-react-native';
 import api from '../api/axios';
 import CurvedHeader from '../components/CurvedHeader';
 
 export default function WalletScreen() {
-  const [data, setData] = useState({ balance: 0, totalEarned: 0, totalPaid: 0, entries: [] });
+  const [data, setData] = useState({ balance: 0, totalEarned: 0, totalPaid: 0 });
+  const [entries, setEntries] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchWallet = async () => {
+  const fetchWallet = async (pageNum = 1) => {
+    if (pageNum === 1) setLoading(true);
+    else setLoadingMore(true);
+
     try {
-      const response = await api.get('/wallet');
-      const entries = response.data.entries || [];
+      const response = await api.get(`/wallet?page=${pageNum}`);
+      const newEntries = response.data.entries?.data || [];
       const balance = response.data.balance || 0;
-      const totalEarned = entries.filter(e => e.type === 'credit').reduce((sum, e) => sum + Number(e.amount), 0);
-      const totalPaid = entries.filter(e => e.type === 'debit').reduce((sum, e) => sum + Number(e.amount), 0);
-      setData({ balance, totalEarned, totalPaid, entries });
+      const totalEarned = response.data.total_earned || 0;
+      const totalPaid = response.data.total_paid || 0;
+      
+      setData({ balance, totalEarned, totalPaid });
+      
+      if (pageNum === 1) {
+        setEntries(newEntries);
+      } else {
+        setEntries(prev => [...prev, ...newEntries]);
+      }
+      
+      setHasMore(response.data.entries?.current_page < response.data.entries?.last_page);
+      setPage(pageNum);
     } catch (e) { console.log('[WalletScreen] Error:', e.message); }
-    finally { setLoading(false); }
+    finally { 
+      setLoading(false); 
+      setLoadingMore(false);
+      setRefreshing(false);
+    }
   };
 
-  useEffect(() => { fetchWallet(); }, []);
-  const onRefresh = async () => { setRefreshing(true); await fetchWallet(); setRefreshing(false); };
+  useEffect(() => { fetchWallet(1); }, []);
+  const onRefresh = () => { setRefreshing(true); fetchWallet(1); };
 
-  if (loading && !refreshing) {
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchWallet(page + 1);
+    }
+  };
+
+  if (loading && !refreshing && entries.length === 0) {
     return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#FDB813" /></View>;
   }
+
+  const renderHeader = () => (
+    <View style={styles.headerContent}>
+      {/* Balance Card */}
+      <View style={styles.balanceCard}>
+        <View style={styles.balanceCardHeader}>
+          <Wallet color="#FDB813" size={24} weight="fill" />
+          <Text style={styles.balanceLabel}>CURRENT BALANCE</Text>
+        </View>
+        <Text style={[styles.balanceAmount, data.balance < 0 && { color: '#fca5a5' }]}>
+          ₹{(data.balance || 0).toLocaleString()}
+        </Text>
+        <View style={styles.balanceSubRow}>
+          <View style={styles.balanceSubItem}>
+            <ArrowCircleUp color="#4ade80" size={16} weight="fill" />
+            <Text style={styles.balanceSubLabel}>Earned</Text>
+            <Text style={[styles.balanceSubValue, { color: '#4ade80' }]}>₹{(data.totalEarned || 0).toLocaleString()}</Text>
+          </View>
+          <View style={styles.balanceSubDivider} />
+          <View style={styles.balanceSubItem}>
+            <ArrowCircleDown color="#f87171" size={16} weight="fill" />
+            <Text style={styles.balanceSubLabel}>Paid</Text>
+            <Text style={[styles.balanceSubValue, { color: '#f87171' }]}>₹{(data.totalPaid || 0).toLocaleString()}</Text>
+          </View>
+        </View>
+      </View>
+
+      <Text style={styles.sectionTitle}>TRANSACTION HISTORY</Text>
+    </View>
+  );
+
+  const renderItem = ({ item: entry, index }) => (
+    <View style={[styles.txItem, index === entries.length - 1 && { borderBottomWidth: 0 }]}>
+      <View style={[styles.txIcon, entry.type === 'credit' ? styles.txIconCredit : styles.txIconDebit]}>
+        {entry.type === 'credit' 
+          ? <ArrowCircleUp color="#059669" size={20} weight="fill" />
+          : <ArrowCircleDown color="#dc2626" size={20} weight="fill" />}
+      </View>
+      <View style={styles.txInfo}>
+        <Text style={styles.txTitle} numberOfLines={1}>{entry.description || entry.type.toUpperCase()}</Text>
+        <Text style={styles.txDate}>{new Date(entry.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' })}</Text>
+        {entry.total_km > 0 && <Text style={styles.txMeta}>{entry.total_km}km • {entry.fuel_litres}L • ₹{entry.fuel_rate}/L</Text>}
+      </View>
+      <View style={styles.txAmountContainer}>
+        <Text style={[styles.txAmount, entry.type === 'credit' ? { color: '#059669' } : { color: '#dc2626' }]}>
+          {entry.type === 'credit' ? '+' : '-'}₹{entry.amount.toLocaleString()}
+        </Text>
+        <Text style={styles.txBalance}>Bal: ₹{entry.balance_after.toLocaleString()}</Text>
+        {entry.paid_by_admin === 1 && (
+          <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>PAID</Text></View>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderFooter = () => {
+    if (!loadingMore) return <View style={{ height: 20 }} />;
+    return <View style={styles.footerLoader}><ActivityIndicator size="small" color="#FDB813" /></View>;
+  };
+
+  const renderEmpty = () => (
+    <View style={styles.emptyCard}>
+      <Receipt color="#cbd5e1" size={40} weight="fill" />
+      <Text style={styles.emptyText}>No transactions yet</Text>
+    </View>
+  );
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
       <CurvedHeader title="My Wallet" />
       <View style={styles.container}>
-        <ScrollView 
+        <FlatList 
+          data={entries}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          ListHeaderComponent={renderHeader}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={renderEmpty}
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FDB813']} />}
           showsVerticalScrollIndicator={false}
-        >
-          {/* Balance Card */}
-          <View style={styles.balanceCard}>
-            <View style={styles.balanceCardHeader}>
-              <Wallet color="#FDB813" size={24} weight="fill" />
-              <Text style={styles.balanceLabel}>CURRENT BALANCE</Text>
-            </View>
-            <Text style={[styles.balanceAmount, data.balance < 0 && { color: '#fca5a5' }]}>
-              ₹{(data.balance || 0).toLocaleString()}
-            </Text>
-            <View style={styles.balanceSubRow}>
-              <View style={styles.balanceSubItem}>
-                <ArrowCircleUp color="#4ade80" size={16} weight="fill" />
-                <Text style={styles.balanceSubLabel}>Earned</Text>
-                <Text style={[styles.balanceSubValue, { color: '#4ade80' }]}>₹{(data.totalEarned || 0).toLocaleString()}</Text>
-              </View>
-              <View style={styles.balanceSubDivider} />
-              <View style={styles.balanceSubItem}>
-                <ArrowCircleDown color="#f87171" size={16} weight="fill" />
-                <Text style={styles.balanceSubLabel}>Paid</Text>
-                <Text style={[styles.balanceSubValue, { color: '#f87171' }]}>₹{(data.totalPaid || 0).toLocaleString()}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Transaction History */}
-          <Text style={styles.sectionTitle}>TRANSACTION HISTORY</Text>
-          <View style={styles.historyContainer}>
-            {data.entries && data.entries.length > 0 ? (
-              data.entries.map((entry, index) => (
-                <View key={entry.id} style={[styles.txItem, index === data.entries.length - 1 && { borderBottomWidth: 0 }]}>
-                  <View style={[styles.txIcon, entry.type === 'credit' ? styles.txIconCredit : styles.txIconDebit]}>
-                    {entry.type === 'credit' 
-                      ? <ArrowCircleUp color="#059669" size={20} weight="fill" />
-                      : <ArrowCircleDown color="#dc2626" size={20} weight="fill" />}
-                  </View>
-                  <View style={styles.txInfo}>
-                    <Text style={styles.txTitle} numberOfLines={1}>{entry.description || entry.type.toUpperCase()}</Text>
-                    <Text style={styles.txDate}>{new Date(entry.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' })}</Text>
-                    {entry.total_km > 0 && <Text style={styles.txMeta}>{entry.total_km}km • {entry.fuel_litres}L • ₹{entry.fuel_rate}/L</Text>}
-                  </View>
-                  <View style={styles.txAmountContainer}>
-                    <Text style={[styles.txAmount, entry.type === 'credit' ? { color: '#059669' } : { color: '#dc2626' }]}>
-                      {entry.type === 'credit' ? '+' : '-'}₹{entry.amount.toLocaleString()}
-                    </Text>
-                    <Text style={styles.txBalance}>Bal: ₹{entry.balance_after.toLocaleString()}</Text>
-                    {entry.paid_by_admin === 1 && (
-                      <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>PAID</Text></View>
-                    )}
-                  </View>
-                </View>
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Receipt color="#cbd5e1" size={40} weight="fill" />
-                <Text style={styles.emptyText}>No transactions yet</Text>
-              </View>
-            )}
-          </View>
-        </ScrollView>
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          style={styles.listStyle}
+        />
       </View>
     </SafeAreaView>
   );
@@ -122,7 +165,10 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 11, fontWeight: '800', color: '#64748b', marginBottom: 10, letterSpacing: 1 },
   
   historyContainer: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
-  txItem: { flexDirection: 'row', padding: 14, borderBottomWidth: 1, borderBottomColor: '#f4f6f9' },
+  listStyle: { backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
+  headerContent: { backgroundColor: '#f4f6f9' },
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
+  txItem: { flexDirection: 'row', padding: 14, borderBottomWidth: 1, borderBottomColor: '#f4f6f9', backgroundColor: '#fff' },
   txIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   txIconCredit: { backgroundColor: '#ecfdf5' },
   txIconDebit: { backgroundColor: '#fef2f2' },
