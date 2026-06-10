@@ -25,13 +25,14 @@ const TabNavigator = () => {
     <Tab.Navigator
       tabBarPosition="bottom"
       screenOptions={{
-        swipeEnabled: true,
+        swipeEnabled: false,
+        animationEnabled: false,
         tabBarActiveTintColor: '#0A1931',
         tabBarInactiveTintColor: '#94a3b8',
         tabBarShowLabel: true,
         tabBarShowIcon: true,
         tabBarStyle: { 
-          height: 62 + insets.bottom, 
+          height: 68 + insets.bottom, 
           paddingBottom: insets.bottom,
           backgroundColor: '#fff',
           justifyContent: 'center',
@@ -50,7 +51,7 @@ const TabNavigator = () => {
           borderBottomRightRadius: 3,
         },
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: 11,
           textTransform: 'none',
           margin: 0,
           padding: 0,
@@ -58,8 +59,8 @@ const TabNavigator = () => {
           letterSpacing: 0.2,
         },
         tabBarIconStyle: {
-          width: 24,
-          height: 24,
+          width: 28,
+          height: 28,
           alignItems: 'center',
           justifyContent: 'center',
         },
@@ -68,27 +69,27 @@ const TabNavigator = () => {
       <Tab.Screen 
         name="HomeTab" 
         component={HomeScreen} 
-        options={{ tabBarLabel: 'Home', tabBarIcon: ({ color }) => <House color={color} size={22} weight="fill" /> }} 
+        options={{ tabBarLabel: 'Home', tabBarIcon: ({ color }) => <House color={color} size={26} weight="fill" /> }} 
       />
       <Tab.Screen 
         name="RoutesTab" 
         component={RoutesScreen} 
-        options={{ tabBarLabel: 'Routes', tabBarIcon: ({ color }) => <MapTrifold color={color} size={22} weight="fill" /> }} 
+        options={{ tabBarLabel: 'Routes', tabBarIcon: ({ color }) => <MapTrifold color={color} size={26} weight="fill" /> }} 
       />
       <Tab.Screen 
         name="WalletTab" 
         component={WalletScreen} 
-        options={{ tabBarLabel: 'Wallet', tabBarIcon: ({ color }) => <Wallet color={color} size={22} weight="fill" /> }} 
+        options={{ tabBarLabel: 'Wallet', tabBarIcon: ({ color }) => <Wallet color={color} size={26} weight="fill" /> }} 
       />
       <Tab.Screen 
         name="HistoryTab" 
         component={JobHistoryScreen} 
-        options={{ tabBarLabel: 'History', tabBarIcon: ({ color }) => <ClockCounterClockwise color={color} size={22} weight="fill" /> }} 
+        options={{ tabBarLabel: 'History', tabBarIcon: ({ color }) => <ClockCounterClockwise color={color} size={26} weight="fill" /> }} 
       />
       <Tab.Screen 
         name="ProfileTab" 
         component={ProfileScreen} 
-        options={{ tabBarLabel: 'Profile', tabBarIcon: ({ color }) => <UserCircle color={color} size={22} weight="fill" /> }} 
+        options={{ tabBarLabel: 'Profile', tabBarIcon: ({ color }) => <UserCircle color={color} size={26} weight="fill" /> }} 
       />
     </Tab.Navigator>
   );
@@ -108,7 +109,7 @@ const AppNavigator = () => {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'none', gestureEnabled: false }}>
         {user ? (
           <>
             <Stack.Screen name="MainTabs" component={TabNavigator} />
