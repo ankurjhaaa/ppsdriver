@@ -35,6 +35,16 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow this app to use your location at all times to track the school vehicle while driving on duty.",
+          "locationAlwaysPermission": "Allow this app to use your location at all times to track the school vehicle while driving on duty.",
+          "locationWhenInUsePermission": "Allow this app to use your location while driving to update parents.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
       ]
     ]
   }

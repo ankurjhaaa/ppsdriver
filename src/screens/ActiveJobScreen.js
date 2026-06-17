@@ -2,7 +2,8 @@ import React, { useContext, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, TextInput, Modal, TouchableWithoutFeedback, Animated } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle, MapPin, MagnifyingGlass, Check, GasPump, Clock, NavigationArrow, Users } from 'phosphor-react-native';
-import { LocationContext, getAndClearRouteCoordinates } from '../context/LocationContext';
+import { LocationContext, getPersistedRouteCoordinates, clearPersistedData } from '../context/LocationContext';
+import * as Location from 'expo-location';
 import api from '../api/axios';
 import CurvedHeader from '../components/CurvedHeader';
 
@@ -86,7 +87,9 @@ export default function ActiveJobScreen({ navigation }) {
         let lat = currentLocation?.coords?.latitude;
         let lng = currentLocation?.coords?.longitude;
       
-      let routeCoords = getAndClearRouteCoordinates();
+      // Read from persistent storage (survives app kills, background termination)
+      let routeCoords = await getPersistedRouteCoordinates();
+      console.log(`[EndJob] Retrieved ${routeCoords.length} points from persistent store`);
 
       // If we don't have a UI location yet, try to use the last known route coordinate or fetch it
       if (!lat || !lng) {
@@ -120,6 +123,11 @@ export default function ActiveJobScreen({ navigation }) {
         route_coordinates: routeCoords
       });
       stopTracking();
+      
+      // Clear persistent storage after successful submission
+      await clearPersistedData();
+      console.log('[EndJob] Persistent location data cleared');
+      
       const distance = response.data.summary?.total_km || response.data.distance || 0;
       const credit = response.data.summary?.wallet_credited || response.data.wallet_credit || 0;
       

@@ -7,7 +7,8 @@ import * as SecureStore from 'expo-secure-store';
 // export const API_URL = 'http://192.168.29.128:8000/api/driver';
 
 
-export const API_URL = 'https://www.ppspurnea.com/api/driver'; 
+// app link
+export const API_URL = 'https://www.ppspurnea.com/api/driver';
 
 //my mobile
 // export const API_URL = 'http://10.254.224.98:8000/api/driver';
