@@ -298,7 +298,7 @@ export default function ActiveJobScreen({ navigation }) {
       <Modal visible={confirmModalVisible} transparent animationType="fade" onRequestClose={() => closeConfirmModal()} onShow={startConfirmSlideUp}>
         <TouchableOpacity activeOpacity={1} style={styles.modalOverlay} onPress={() => closeConfirmModal()}>
           <TouchableWithoutFeedback>
-            <Animated.View style={[styles.modalContent, { transform: [{ translateY: confirmModalY }] }]}>
+            <Animated.View style={[styles.modalContent, { transform: [{ translateY: confirmModalY }], paddingBottom: Math.max(24, insets.bottom + 20) }]}>
               <View style={styles.dragHandle} />
               <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
                 <CheckCircle color="#ef4444" size={28} weight="fill" />
@@ -322,7 +322,7 @@ export default function ActiveJobScreen({ navigation }) {
       <Modal visible={summaryModalVisible} transparent animationType="fade" onRequestClose={() => closeSummaryModal()} onShow={startSummarySlideUp}>
         <TouchableOpacity activeOpacity={1} style={styles.modalOverlay} onPress={() => closeSummaryModal(() => navigation.navigate('MainTabs'))}>
           <TouchableWithoutFeedback>
-            <Animated.View style={[styles.modalContent, { transform: [{ translateY: summaryModalY }] }]}>
+            <Animated.View style={[styles.modalContent, { transform: [{ translateY: summaryModalY }], paddingBottom: Math.max(24, insets.bottom + 20) }]}>
               <View style={styles.dragHandle} />
               <View style={styles.summaryTop}>
                 <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(5, 150, 105, 0.1)' }]}>

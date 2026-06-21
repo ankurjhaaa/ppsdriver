@@ -43,7 +43,8 @@
           "locationAlwaysPermission": "Allow this app to use your location at all times to track the school vehicle while driving on duty.",
           "locationWhenInUsePermission": "Allow this app to use your location while driving to update parents.",
           "isIosBackgroundLocationEnabled": true,
-          "isAndroidBackgroundLocationEnabled": true
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ]
     ]

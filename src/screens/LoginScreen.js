@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Image } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Eye, EyeClosed, EnvelopeSimple, LockKey } from 'phosphor-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Dimensions } from 'react-native';
@@ -13,6 +13,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error } = useContext(AuthContext);
+  const insets = useSafeAreaInsets();
 
   const handleLogin = async () => {
     if (!email || !password) return;
@@ -51,7 +52,7 @@ export default function LoginScreen() {
       </View>
 
       {/* Form Section */}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.formArea}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.formArea, { paddingBottom: Math.max(20, insets.bottom + 20) }]}>
         <Text style={styles.loginTitle}>Sign In</Text>
         <Text style={styles.loginSub}>Enter your credentials to continue</Text>
 

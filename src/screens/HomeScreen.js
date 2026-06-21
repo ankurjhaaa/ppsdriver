@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, RefreshControl, StyleSheet, Alert, Modal, TextInput, Animated, TouchableWithoutFeedback, Image, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, RefreshControl, StyleSheet, Alert, Modal, TextInput, Animated, TouchableWithoutFeedback, Image, ActivityIndicator, Linking, AppState } from 'react-native';
 import * as Location from 'expo-location';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bus, MapPin, Wallet, NavigationArrow, CheckCircle, Users, CaretRight } from 'phosphor-react-native';
 import { AuthContext } from '../context/AuthContext';
 import { LocationContext } from '../context/LocationContext';
@@ -12,6 +12,7 @@ import CurvedHeader from '../components/CurvedHeader';
 export default function HomeScreen({ navigation }) {
   const { user, driver } = useContext(AuthContext);
   const { currentJob, startTracking, stopTracking } = useContext(LocationContext);
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
   const [routeModalVisible, setRouteModalVisible] = useState(false);
@@ -29,6 +30,9 @@ export default function HomeScreen({ navigation }) {
   const [pendingJobParams, setPendingJobParams] = useState(null);
   const [cameraFacing, setCameraFacing] = useState('front');
   const cameraRef = React.useRef(null);
+
+  const [permissionModalVisible, setPermissionModalVisible] = useState(false);
+  const [permState, setPermState] = useState({ fg: true, bg: true });
 
   const routeModalY = React.useRef(new Animated.Value(600)).current;
   const otherTripModalY = React.useRef(new Animated.Value(600)).current;
@@ -60,9 +64,39 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  useEffect(() => { fetchDashboard(); }, []);
+  const checkPermissions = async () => {
+    const fg = await Location.getForegroundPermissionsAsync();
+    let bgStatus = false;
+    if (fg.status === 'granted') {
+      const bg = await Location.getBackgroundPermissionsAsync();
+      bgStatus = (bg.status === 'granted');
+    }
+    
+    if (fg.status !== 'granted' || !bgStatus) {
+      setPermState({ fg: fg.status === 'granted', bg: bgStatus });
+      setPermissionModalVisible(true);
+      return false;
+    }
+    return true;
+  };
 
-  const onRefresh = async () => { setRefreshing(true); await fetchDashboard(); setRefreshing(false); };
+  useEffect(() => { 
+    fetchDashboard(); 
+    checkPermissions();
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active' && permissionModalVisible) {
+        checkPermissions().then(hasPerms => {
+          if (hasPerms) setPermissionModalVisible(false);
+        });
+      }
+    });
+    return () => subscription.remove();
+  }, [permissionModalVisible]);
+
+  const onRefresh = async () => { setRefreshing(true); await fetchDashboard(); checkPermissions(); setRefreshing(false); };
 
   const proceedToStartJob = async (route, isManual = false, reason = null, tripDirection = null, facePhoto = null) => {
     setIsVerifying(true);
@@ -155,6 +189,11 @@ export default function HomeScreen({ navigation }) {
 
   const startNewJob = async (type) => {
     if (currentJob) { Alert.alert('Job in Progress', 'You already have an active job.'); return; }
+    
+    // Check permissions before opening any modal
+    const hasPerms = await checkPermissions();
+    if (!hasPerms) return;
+
     if (type === 'other') { openOtherTripModal(); return; }
     const routes = dashboardData?.todays_routes || [];
     if (routes.length === 0) { Alert.alert('No Routes', 'No routes assigned for today.'); return; }
@@ -308,7 +347,7 @@ export default function HomeScreen({ navigation }) {
         <Modal visible={routeModalVisible} transparent animationType="fade" onRequestClose={closeRouteModal} onShow={startRouteSlideUp}>
           <TouchableOpacity activeOpacity={1} style={styles.modalOverlay} onPress={closeRouteModal}>
             <TouchableWithoutFeedback>
-              <Animated.View style={[styles.modalContent, { transform: [{ translateY: routeModalY }] }]}>
+              <Animated.View style={[styles.modalContent, { transform: [{ translateY: routeModalY }], paddingBottom: Math.max(40, insets.bottom + 20) }]}>
                 <View style={styles.dragHandle} />
                 <Text style={styles.modalTitle}>Select School Route</Text>
                 <ScrollView style={styles.modalRouteList}>
@@ -354,7 +393,7 @@ export default function HomeScreen({ navigation }) {
         <Modal visible={tripDirectionModalVisible} transparent animationType="fade" onRequestClose={closeTripDirectionModal} onShow={startTripDirectionSlideUp}>
           <TouchableOpacity activeOpacity={1} style={styles.modalOverlay} onPress={closeTripDirectionModal}>
             <TouchableWithoutFeedback>
-              <Animated.View style={[styles.modalContent, { transform: [{ translateY: tripDirectionModalY }] }]}>
+              <Animated.View style={[styles.modalContent, { transform: [{ translateY: tripDirectionModalY }], paddingBottom: Math.max(40, insets.bottom + 20) }]}>
                 <View style={styles.dragHandle} />
                 <Text style={styles.modalTitle}>Select Trip Type</Text>
                 <Text style={{ fontSize: 13, color: '#64748b', marginBottom: 20, marginTop: -10 }}>For route: {selectedRouteForDirection?.route_name}</Text>
@@ -391,7 +430,7 @@ export default function HomeScreen({ navigation }) {
         <Modal visible={otherTripModalVisible} transparent animationType="fade" onRequestClose={closeOtherTripModal} onShow={startOtherTripSlideUp}>
           <TouchableOpacity activeOpacity={1} style={styles.modalOverlay} onPress={closeOtherTripModal}>
             <TouchableWithoutFeedback>
-              <Animated.View style={[styles.modalContent, { transform: [{ translateY: otherTripModalY }] }]}>
+              <Animated.View style={[styles.modalContent, { transform: [{ translateY: otherTripModalY }], paddingBottom: Math.max(40, insets.bottom + 20) }]}>
                 <View style={styles.dragHandle} />
                 <Text style={styles.modalTitle}>Other Trip Details</Text>
                 <TextInput
@@ -481,6 +520,45 @@ export default function HomeScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
               )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Permission & Battery Warning Modal */}
+        <Modal visible={permissionModalVisible} transparent animationType="slide" onRequestClose={() => setPermissionModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.permissionModalContent, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
+              <View style={styles.dragHandle} />
+              <View style={styles.warningIconWrap}>
+                <MapPin color="#ef4444" size={32} weight="fill" />
+              </View>
+              <Text style={styles.modalTitle}>Action Required</Text>
+              <Text style={styles.modalSub}>
+                To track your trips perfectly, this app requires background location and unrestricted battery settings.
+              </Text>
+              
+              <View style={styles.reqContainer}>
+                <View style={styles.reqRow}>
+                  <View style={[styles.reqDot, permState.fg ? { backgroundColor: '#10b981' } : { backgroundColor: '#ef4444' }]} />
+                  <Text style={styles.reqText}>1. Allow Location Tracking</Text>
+                </View>
+                <View style={styles.reqRow}>
+                  <View style={[styles.reqDot, permState.bg ? { backgroundColor: '#10b981' } : { backgroundColor: '#ef4444' }]} />
+                  <Text style={styles.reqText}>2. Select "Allow all the time"</Text>
+                </View>
+                <View style={[styles.reqRow, { marginBottom: 0 }]}>
+                  <View style={[styles.reqDot, { backgroundColor: '#FDB813' }]} />
+                  <Text style={styles.reqText}>3. Set Battery to "Unrestricted"</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.settingsBtn} activeOpacity={0.8} onPress={() => Linking.openSettings()}>
+                <Text style={styles.settingsBtnText}>Open App Settings</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.laterBtn} onPress={() => setPermissionModalVisible(false)}>
+                <Text style={styles.laterBtnText}>I'll do it later</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -598,4 +676,16 @@ const styles = StyleSheet.create({
   loadingControlText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   cameraSwitchBtn: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.1)' },
   cameraSwitchText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  // Permission Modal
+  permissionModalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, alignItems: 'center' },
+  warningIconWrap: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(239, 68, 68, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  reqContainer: { width: '100%', backgroundColor: '#f8fafc', padding: 16, borderRadius: 12, marginBottom: 24, borderWidth: 1, borderColor: '#e2e8f0' },
+  reqRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  reqDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  reqText: { fontSize: 13, color: '#0f172a', fontWeight: '600' },
+  settingsBtn: { backgroundColor: '#0A1931', width: '100%', paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginBottom: 12 },
+  settingsBtnText: { color: '#FDB813', fontSize: 15, fontWeight: '800' },
+  laterBtn: { paddingVertical: 10 },
+  laterBtnText: { color: '#64748b', fontSize: 14, fontWeight: '700' },
 });
