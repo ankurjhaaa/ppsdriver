@@ -27,7 +27,7 @@ class KalmanFilter {
     this.variance = -1; // Uninitialized
     // Process noise — how much we expect the position to change per second
     // Lower = smoother (but slower to react), Higher = more responsive (but noisier)
-    this.qMetersPerSecond = 3; // Tuned for school bus speeds (20-50 km/h)
+    this.qMetersPerSecond = 4; // Tuned for school bus speeds with 1s updates
   }
 
   /**
@@ -215,7 +215,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       smoothLat, smoothLng
     );
 
-    if (distance < 10) {
+    if (distance < 5) {
       // Not enough movement — use last known good point for live ping
       validLat = lastRecordedPoint.latitude;
       validLng = lastRecordedPoint.longitude;
@@ -232,7 +232,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         );
         const angleDiff = getAngleDifference(lastHeading, currentBearing);
 
-        if (angleDiff > 150 && distance < 30) {
+        if (angleDiff > 150 && distance < 15) {
           console.log(`[BackgroundTask] REJECTED: suspicious reversal ${angleDiff.toFixed(0)}° at ${distance.toFixed(1)}m`);
           validLat = lastRecordedPoint.latitude;
           validLng = lastRecordedPoint.longitude;
@@ -422,9 +422,9 @@ export const LocationProvider = ({ children }) => {
       console.log('[LocationContext] Starting background location updates...');
       await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
         accuracy: Location.Accuracy.BestForNavigation,
-        timeInterval: 2000,       // Every 2 seconds (was 1s — reduced to save battery while maintaining accuracy)
-        distanceInterval: 3,      // Or every 3 meters of movement
-        deferredUpdatesInterval: 1000,
+        timeInterval: 1000,       // Every 1 second — maximum accuracy for route geometry
+        distanceInterval: 2,      // Or every 2 meters of movement
+        deferredUpdatesInterval: 500,
         foregroundService: {
           notificationTitle: '🚌 Live Tracking Active',
           notificationBody: 'GPS location is being recorded for this trip.',
@@ -441,8 +441,8 @@ export const LocationProvider = ({ children }) => {
       const sub = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.BestForNavigation,
-          timeInterval: 2000,
-          distanceInterval: 3,
+          timeInterval: 1000,
+          distanceInterval: 2,
         },
         (location) => {
           if (location.coords.accuracy <= 25) {
