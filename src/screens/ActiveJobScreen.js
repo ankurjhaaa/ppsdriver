@@ -23,6 +23,18 @@ export default function ActiveJobScreen({ navigation }) {
   const [cachedJob, setCachedJob] = useState(currentJob);
   const [isScreenReady, setIsScreenReady] = useState(false);
 
+  const [extraStudents, setExtraStudents] = useState([]);
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const searchModalY = React.useRef(new Animated.Value(800)).current;
+  const openSearchModal = () => { setSearchModalVisible(true); searchModalY.setValue(800); };
+  const startSearchSlideUp = () => { Animated.timing(searchModalY, { toValue: 0, duration: 300, useNativeDriver: true }).start(); };
+  const closeSearchModal = () => { Animated.timing(searchModalY, { toValue: 800, duration: 250, useNativeDriver: true }).start(() => { setSearchModalVisible(false); setStudentSearchQuery(''); setSearchResults([]); }); };
+
+
   const confirmModalY = React.useRef(new Animated.Value(600)).current;
   const summaryModalY = React.useRef(new Animated.Value(600)).current;
 
@@ -73,6 +85,36 @@ export default function ActiveJobScreen({ navigation }) {
     } catch (e) {
       Alert.alert('Error', e.response?.data?.message || `Failed to record ${actionType}`);
     }
+  };
+
+  const performStudentSearch = async (query) => {
+    setStudentSearchQuery(query);
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const res = await api.get('/students/search', { params: { q: query } });
+      setSearchResults(res.data?.data || []);
+    } catch (e) {
+      // ignore
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const addExtraStudent = (student) => {
+    const isAlreadyAdded = extraStudents.some(s => s.student_id === student.id) || (displayJob?.route?.students || []).some(s => s.student_id === student.id);
+    if (!isAlreadyAdded) {
+      const routeStudent = {
+        student_id: student.id,
+        pickup_point: `Ad-hoc (${student.class_section})`,
+        student: { user: { name: student.name } }
+      };
+      setExtraStudents(prev => [...prev, routeStudent]);
+    }
+    closeSearchModal();
   };
 
   const confirmEndJob = () => {
@@ -167,7 +209,9 @@ export default function ActiveJobScreen({ navigation }) {
       );
     }
 
-    const studentsList = displayJob.route?.students || [];
+    const baseStudents = displayJob.route?.students || [];
+    const studentsList = [...baseStudents, ...extraStudents];
+    
     const filteredStudents = studentsList.filter(st => {
       const name = (st.student?.user?.name || '').toLowerCase();
       const query = searchQuery.toLowerCase();
@@ -225,8 +269,13 @@ export default function ActiveJobScreen({ navigation }) {
             <View style={styles.boardContainer}>
               <View style={styles.boardHeaderRow}>
                 <Text style={styles.boardTitle}>Students</Text>
-                <View style={styles.progressBadge}>
-                  <Text style={styles.progressText}>{actionCount}/{studentsList.length} {isToSchool ? 'picked' : 'dropped'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TouchableOpacity style={styles.addExceptionBtn} onPress={openSearchModal} activeOpacity={0.7}>
+                    <Text style={styles.addExceptionBtnText}>+ Add Extra</Text>
+                  </TouchableOpacity>
+                  <View style={styles.progressBadge}>
+                    <Text style={styles.progressText}>{actionCount}/{studentsList.length} {isToSchool ? 'picked' : 'dropped'}</Text>
+                  </View>
                 </View>
               </View>
 
@@ -350,6 +399,48 @@ export default function ActiveJobScreen({ navigation }) {
           </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
+
+      <Modal visible={searchModalVisible} transparent animationType="fade" onRequestClose={closeSearchModal} onShow={startSearchSlideUp}>
+        <TouchableOpacity activeOpacity={1} style={styles.modalOverlay} onPress={closeSearchModal}>
+          <TouchableWithoutFeedback>
+            <Animated.View style={[styles.modalContent, { transform: [{ translateY: searchModalY }], paddingBottom: Math.max(24, insets.bottom + 20), height: '80%' }]}>
+              <View style={styles.dragHandle} />
+              <Text style={styles.modalTitle}>Search Exception Student</Text>
+              <Text style={[styles.modalSub, { marginBottom: 12 }]}>Add a student not listed in your route.</Text>
+              
+              <View style={[styles.searchContainer, { width: '100%', marginBottom: 16 }]}>
+                <MagnifyingGlass color="#94a3b8" size={18} />
+                <TextInput style={styles.searchInput} placeholder="Search by name or admission no..." placeholderTextColor="#94a3b8" value={studentSearchQuery} onChangeText={performStudentSearch} autoFocus />
+              </View>
+              
+              {isSearching ? <ActivityIndicator color="#FDB813" style={{ marginTop: 30 }} /> : (
+                <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false}>
+                  {searchResults.map(st => (
+                    <TouchableOpacity key={st.id} style={styles.searchResultItem} onPress={() => addExtraStudent(st)}>
+                      <View style={styles.studentAvatar}>
+                         <Text style={styles.studentAvatarText}>{st.name?.charAt(0)}</Text>
+                      </View>
+                      <View style={styles.studentDetails}>
+                         <Text style={styles.studentName}>{st.name}</Text>
+                         <Text style={styles.pickupText}>{st.admission_no} • {st.class_section}</Text>
+                      </View>
+                      <View style={styles.addBtn}>
+                        <Text style={styles.addBtnText}>Add</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  {studentSearchQuery.length >= 2 && searchResults.length === 0 && (
+                    <Text style={{ textAlign: 'center', marginTop: 30, color: '#64748b', fontSize: 13, fontWeight: '500' }}>No students found matching "{studentSearchQuery}"</Text>
+                  )}
+                  {studentSearchQuery.length < 2 && (
+                    <Text style={{ textAlign: 'center', marginTop: 30, color: '#94a3b8', fontSize: 13, fontWeight: '500' }}>Type at least 2 characters to search</Text>
+                  )}
+                </ScrollView>
+              )}
+            </Animated.View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -429,4 +520,9 @@ const styles = StyleSheet.create({
   // Loader
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A1931' },
   loadingText: { color: '#fff', marginTop: 12, fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
+  addExceptionBtn: { backgroundColor: '#fef3c7', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#fde68a' },
+  addExceptionBtnText: { color: '#d97706', fontSize: 11, fontWeight: '800' },
+  searchResultItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  addBtn: { backgroundColor: '#0A1931', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  addBtnText: { color: '#FDB813', fontSize: 10, fontWeight: '800' }
 });
