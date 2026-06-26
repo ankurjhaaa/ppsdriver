@@ -1,13 +1,15 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, RefreshControl, StyleSheet, Alert, Modal, TextInput, Animated, TouchableWithoutFeedback, Image, ActivityIndicator, Linking, AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bus, MapPin, Wallet, NavigationArrow, CheckCircle, Users, CaretRight } from 'phosphor-react-native';
+import { Bus, MapPin, Wallet, NavigationArrow, CheckCircle, Users, CaretRight, ArrowsClockwise } from 'phosphor-react-native';
 import { AuthContext } from '../context/AuthContext';
 import { LocationContext } from '../context/LocationContext';
+import { getCompletedTripIds, getRouteCoordinates } from '../utils/LocationStore';
 import api from '../api/axios';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import CurvedHeader from '../components/CurvedHeader';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function HomeScreen({ navigation }) {
   const { user, driver } = useContext(AuthContext);
@@ -24,6 +26,8 @@ export default function HomeScreen({ navigation }) {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState(null);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [showFaceScan, setShowFaceScan] = useState(false);
@@ -83,7 +87,51 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => { 
     fetchDashboard(); 
     checkPermissions();
+    checkUnsyncedTrips();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      checkUnsyncedTrips();
+    }, [])
+  );
+
+  const checkUnsyncedTrips = async () => {
+    const ids = await getCompletedTripIds();
+    setUnsyncedCount(ids.length);
+  };
+
+  const handleBulkSync = async () => {
+    if (currentJob) {
+      Alert.alert('Trip Active', 'You cannot sync routes while a trip is currently active. Please end the trip first.');
+      return;
+    }
+
+    const ids = await getCompletedTripIds();
+    if (ids.length === 0) {
+      Alert.alert('No Trips', 'No completed trips found to sync.');
+      return;
+    }
+
+    setSyncing(true);
+    let successCount = 0;
+
+    try {
+      for (const jobId of ids) {
+        const points = await getRouteCoordinates(jobId);
+        if (points.length > 0) {
+          await api.post(`/job/${jobId}/sync-geometry`, { points });
+          successCount++;
+        }
+      }
+      Alert.alert('Sync Complete', `Successfully synced ${successCount} route(s) to the server.`);
+    } catch (e) {
+      console.log('[HomeScreen] Sync error:', e.message);
+      Alert.alert('Sync Error', `Failed to sync all routes. Synced ${successCount} before error occurred.`);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
@@ -96,7 +144,7 @@ export default function HomeScreen({ navigation }) {
     return () => subscription.remove();
   }, [permissionModalVisible]);
 
-  const onRefresh = async () => { setRefreshing(true); await fetchDashboard(); checkPermissions(); setRefreshing(false); };
+  const onRefresh = async () => { setRefreshing(true); await fetchDashboard(); checkPermissions(); await checkUnsyncedTrips(); setRefreshing(false); };
 
   const proceedToStartJob = async (route, isManual = false, reason = null, tripDirection = null, facePhoto = null) => {
     setIsVerifying(true);
@@ -230,10 +278,24 @@ export default function HomeScreen({ navigation }) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FDB813']} />}
           showsVerticalScrollIndicator={false}
         >
-          {/* Welcome */}
+          {/* Welcome & Sync */}
           <View style={styles.welcomeSection}>
-            <Text style={styles.greeting}>{greetText},</Text>
-            <Text style={styles.name}>{user?.name} 👋</Text>
+            <View>
+              <Text style={styles.greeting}>{greetText},</Text>
+              <Text style={styles.name}>{user?.name} 👋</Text>
+            </View>
+            <TouchableOpacity 
+              style={[styles.syncButton, currentJob ? styles.syncButtonDisabled : null]} 
+              onPress={handleBulkSync}
+              activeOpacity={0.6}
+              disabled={syncing || !!currentJob}
+            >
+              {syncing ? (
+                <ActivityIndicator size="small" color="#0A1931" />
+              ) : (
+                <ArrowsClockwise color="#0A1931" size={24} weight="bold" />
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* Active Job / Start Job Section */}
@@ -574,14 +636,18 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 15, fontWeight: '900', color: '#0A1931' },
 
   content: { padding: 16, paddingBottom: 20 },
-  welcomeSection: { marginBottom: 16 },
-  greeting: { fontSize: 13, color: '#64748b', fontWeight: '500' },
-  name: { fontSize: 20, fontWeight: '900', color: '#0f172a' },
+  welcomeSection: { marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  greeting: { fontSize: 13, color: '#64748b', fontWeight: '700', letterSpacing: 0.5 },
+  name: { fontSize: 24, fontWeight: '900', color: '#0A1931', marginTop: 2 },
+  
+  syncButton: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'flex-end' },
+  syncButtonDisabled: { opacity: 0.3 },
 
   sectionTitle: { fontSize: 11, fontWeight: '800', color: '#64748b', marginBottom: 10, letterSpacing: 1, textTransform: 'uppercase' },
 
-  // Start Job Buttons
   startJobSection: { marginBottom: 20 },
+
+  // Start Job Buttons
   startJobButtons: { flexDirection: 'row', gap: 12 },
   routeBtn: { flex: 1, backgroundColor: '#0A1931', borderRadius: 14, padding: 18, alignItems: 'center', elevation: 3, shadowColor: '#0A1931', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6 },
   otherBtn: { flex: 1, backgroundColor: '#FDB813', borderRadius: 14, padding: 18, alignItems: 'center', elevation: 3, shadowColor: '#FDB813', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6 },

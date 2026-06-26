@@ -9,17 +9,20 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const STORAGE_KEY = '@pps_location_queue';
-const PENDING_SYNC_KEY = '@pps_pending_sync';
-
+const COMPLETED_TRIPS_KEY = '@pps_completed_trips';
 let pointIdCounter = 0;
 
+const getJobKey = (jobId) => `@pps_trip_${jobId}`;
+
 /**
- * Save a GPS point to persistent storage.
+ * Save a GPS point to persistent storage for a specific job.
  */
-export async function savePoint(latitude, longitude, timestamp, accuracy = 0, speed = 0, heading = 0) {
+export async function savePoint(jobId, latitude, longitude, timestamp, accuracy = 0, speed = 0, heading = 0) {
+  if (!jobId) return null;
+  
   try {
-    const existing = await AsyncStorage.getItem(STORAGE_KEY);
+    const key = getJobKey(jobId);
+    const existing = await AsyncStorage.getItem(key);
     const points = existing ? JSON.parse(existing) : [];
 
     pointIdCounter++;
@@ -36,22 +39,8 @@ export async function savePoint(latitude, longitude, timestamp, accuracy = 0, sp
 
     points.push(point);
 
-    // Keep max 5000 points in storage to prevent memory issues on very long trips
-    // (5000 points × 1 per second = ~83 minutes of continuous tracking)
-    if (points.length > 5000) {
-      // Remove oldest synced points first
-      const synced = points.filter(p => p.synced);
-      const unsynced = points.filter(p => !p.synced);
-      
-      if (synced.length > 1000) {
-        // Remove oldest 500 synced points
-        synced.splice(0, 500);
-      }
-      const trimmed = [...synced, ...unsynced];
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-    } else {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(points));
-    }
+    // Store unlimited points as requested by the user
+    await AsyncStorage.setItem(key, JSON.stringify(points));
 
     return point;
   } catch (e) {
@@ -61,27 +50,30 @@ export async function savePoint(latitude, longitude, timestamp, accuracy = 0, sp
 }
 
 /**
- * Get all unsynced points (for network flush).
+ * Get all unsynced points for a specific job.
  */
-export async function getUnsyncedPoints() {
+export async function getUnsyncedPoints(jobId) {
+  if (!jobId) return [];
   try {
-    const existing = await AsyncStorage.getItem(STORAGE_KEY);
+    const existing = await AsyncStorage.getItem(getJobKey(jobId));
     if (!existing) return [];
     const points = JSON.parse(existing);
     return points.filter(p => !p.synced);
   } catch (e) {
-    console.error('[LocationStore] Failed to get unsynced:', e.message);
     return [];
   }
 }
 
 /**
- * Mark specific point IDs as synced.
+ * Mark specific point IDs as synced for a specific job.
  */
-export async function markSynced(ids) {
+export async function markSynced(jobId, ids) {
+  if (!jobId) return;
   try {
-    const existing = await AsyncStorage.getItem(STORAGE_KEY);
+    const key = getJobKey(jobId);
+    const existing = await AsyncStorage.getItem(key);
     if (!existing) return;
+    
     const points = JSON.parse(existing);
     const idSet = new Set(ids);
     for (const point of points) {
@@ -89,22 +81,22 @@ export async function markSynced(ids) {
         point.synced = true;
       }
     }
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(points));
+    await AsyncStorage.setItem(key, JSON.stringify(points));
   } catch (e) {
     console.error('[LocationStore] Failed to mark synced:', e.message);
   }
 }
 
 /**
- * Get ALL route coordinates (synced + unsynced) for job end submission.
- * Returns in chronological order with only lat/lng/timestamp.
+ * Get ALL route coordinates for a specific job (synced + unsynced) 
+ * Used for full map sync to the backend.
  */
-export async function getRouteCoordinates() {
+export async function getRouteCoordinates(jobId) {
+  if (!jobId) return [];
   try {
-    const existing = await AsyncStorage.getItem(STORAGE_KEY);
+    const existing = await AsyncStorage.getItem(getJobKey(jobId));
     if (!existing) return [];
     const points = JSON.parse(existing);
-    // Sort by timestamp and return clean coordinate objects
     return points
       .sort((a, b) => a.timestamp - b.timestamp)
       .map(p => ({
@@ -113,17 +105,17 @@ export async function getRouteCoordinates() {
         timestamp: p.timestamp,
       }));
   } catch (e) {
-    console.error('[LocationStore] Failed to get route coordinates:', e.message);
     return [];
   }
 }
 
 /**
- * Get total point count (for UI display/debugging).
+ * Get total point count for a job (UI display).
  */
-export async function getPointCount() {
+export async function getPointCount(jobId) {
+  if (!jobId) return 0;
   try {
-    const existing = await AsyncStorage.getItem(STORAGE_KEY);
+    const existing = await AsyncStorage.getItem(getJobKey(jobId));
     if (!existing) return 0;
     return JSON.parse(existing).length;
   } catch (e) {
@@ -132,28 +124,103 @@ export async function getPointCount() {
 }
 
 /**
- * Clear all stored points (call after successful job end).
+ * Check if the given job has any stored points.
  */
-export async function clearAll() {
+export async function hasStoredPoints(jobId) {
+  return (await getPointCount(jobId)) > 0;
+}
+
+/**
+ * Mark a job as completed and retain latest 10 trips locally.
+ * Oldest trips beyond 10 are auto-deleted to save phone storage.
+ */
+export async function markJobCompleteAndRetain(jobId) {
+  if (!jobId) return;
+  const id = String(jobId); // Normalize to string (API sends number, AsyncStorage sends string)
   try {
-    await AsyncStorage.removeItem(STORAGE_KEY);
-    await AsyncStorage.removeItem(PENDING_SYNC_KEY);
-    pointIdCounter = 0;
-    console.log('[LocationStore] All points cleared.');
+    const existing = await AsyncStorage.getItem(COMPLETED_TRIPS_KEY);
+    let completedJobs = existing ? JSON.parse(existing) : [];
+
+    // Avoid duplicates (compare as strings)
+    if (!completedJobs.map(String).includes(id)) {
+      completedJobs.push(id);
+    }
+
+    // Keep only the latest 10 completed trips
+    if (completedJobs.length > 10) {
+      const jobsToRemove = completedJobs.slice(0, completedJobs.length - 10);
+      completedJobs = completedJobs.slice(-10);
+
+      // Delete GPS data of older trips to free storage
+      for (const oldJobId of jobsToRemove) {
+        await AsyncStorage.removeItem(getJobKey(oldJobId));
+      }
+      console.log(`[LocationStore] Cleaned up ${jobsToRemove.length} old trip(s)`);
+    }
+
+    await AsyncStorage.setItem(COMPLETED_TRIPS_KEY, JSON.stringify(completedJobs));
+    console.log(`[LocationStore] Retained job ${id}. Total stored trips: ${completedJobs.length}`);
   } catch (e) {
-    console.error('[LocationStore] Failed to clear:', e.message);
+    console.error('[LocationStore] Failed to mark job complete:', e.message);
   }
 }
 
 /**
- * Check if there are any stored points (to detect interrupted trips on app restart).
+ * Get all completed trip IDs currently stored locally.
  */
-export async function hasStoredPoints() {
+export async function getCompletedTripIds() {
   try {
-    const existing = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!existing) return false;
-    return JSON.parse(existing).length > 0;
+    const existing = await AsyncStorage.getItem(COMPLETED_TRIPS_KEY);
+    return existing ? JSON.parse(existing) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Remove a completed trip ID from the registry and delete its data.
+ * Call this after successfully syncing the geometry to the backend.
+ */
+export async function removeCompletedTripId(jobId) {
+  try {
+    const existing = await AsyncStorage.getItem(COMPLETED_TRIPS_KEY);
+    if (!existing) return;
+    
+    let completedJobs = JSON.parse(existing);
+    completedJobs = completedJobs.filter(id => id !== jobId);
+    
+    await AsyncStorage.setItem(COMPLETED_TRIPS_KEY, JSON.stringify(completedJobs));
+    await AsyncStorage.removeItem(getJobKey(jobId));
+    console.log(`[LocationStore] Removed successfully synced trip ${jobId}. Remaining: ${completedJobs.length}`);
+  } catch (e) {
+    console.error('[LocationStore] Failed to remove completed trip:', e.message);
+  }
+}
+
+/**
+ * Verify if a specific job ID exists in local storage.
+ */
+export async function isJobLocallyStored(jobId) {
+  if (!jobId) return false;
+  try {
+    const count = await getPointCount(jobId);
+    return count > 0;
   } catch (e) {
     return false;
+  }
+}
+
+/**
+ * Clear all local storage manually (if needed for debugging).
+ */
+export async function clearAllLocalData() {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const tripKeys = keys.filter(k => k.startsWith('@pps_trip_') || k === COMPLETED_TRIPS_KEY);
+    if (tripKeys.length > 0) {
+      await AsyncStorage.multiRemove(tripKeys);
+    }
+  } catch (e) {
+    console.error('[LocationStore] Failed to clear all:', e.message);
   }
 }

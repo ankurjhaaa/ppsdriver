@@ -9,9 +9,11 @@ import {
   getUnsyncedPoints,
   markSynced,
   getRouteCoordinates as getStoredRouteCoordinates,
-  clearAll as clearLocationStore,
+  clearAllLocalData,
   getPointCount,
+  markJobCompleteAndRetain,
 } from '../utils/LocationStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const LocationContext = createContext();
 
@@ -106,19 +108,21 @@ export const getAndClearRouteCoordinates = () => {
 /**
  * Get route coordinates from persistent store (preferred method).
  */
-export const getPersistedRouteCoordinates = async () => {
-  return await getStoredRouteCoordinates();
+export const getPersistedRouteCoordinates = async (jobId) => {
+  return await getStoredRouteCoordinates(jobId);
 };
 
 /**
  * Clear all persistent location data.
  */
-export const clearPersistedData = async () => {
+export const clearPersistedData = async (jobId) => {
   routeCoordinates = [];
   lastRecordedPoint = null;
   lastHeading = null;
   kalmanFilter.reset();
-  await clearLocationStore();
+  if (jobId) {
+    await markJobCompleteAndRetain(jobId);
+  }
 };
 
 // ─────────────────────────────────────────────────────
@@ -254,8 +258,13 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     // Save to RAM (legacy)
     routeCoordinates.push(point);
 
+    // Read the current job ID from AsyncStorage since this task can run when React is dead
+    const currentJobId = await AsyncStorage.getItem('@pps_active_job_id');
+    
     // Save to persistent storage (primary — survives app kills)
-    await savePoint(smoothLat, smoothLng, timestamp, accuracy, validSpeed, rawHeading || 0);
+    if (currentJobId) {
+      await savePoint(currentJobId, smoothLat, smoothLng, timestamp, accuracy, validSpeed, rawHeading || 0);
+    }
 
     // Update tracking state
     if (lastRecordedPoint) {
@@ -274,21 +283,23 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   if (now - lastSyncTime > 8000) {
     lastSyncTime = now;
 
-    if (isNetworkAvailable) {
-      try {
-        await api.post('/location', {
-          latitude: validLat,
-          longitude: validLng,
-          speed: validSpeed,
-          heading: rawHeading || 0,
-        });
-        console.log(`[BackgroundTask] ✓ Live ping synced | ${validLat.toFixed(6)}, ${validLng.toFixed(6)}`);
-      } catch (err) {
-        console.log(`[BackgroundTask] ✗ Live ping failed (offline): ${err?.message}`);
-        isNetworkAvailable = false; // Will be re-checked by NetInfo listener
-      }
-    } else {
-      console.log('[BackgroundTask] Offline — point stored locally, will sync later');
+    // We should always try to sync if enough time has passed.
+    // Relying solely on NetInfo in the background can cause permanent offline state
+    // if the app is backgrounded and misses network events.
+    try {
+      await api.post('/location', {
+        latitude: validLat,
+        longitude: validLng,
+        speed: validSpeed,
+        heading: rawHeading || 0,
+      });
+      console.log(`[BackgroundTask] ✓ Live ping synced | ${validLat.toFixed(6)}, ${validLng.toFixed(6)}`);
+      // If we just successfully synced, we are definitely online
+      isNetworkAvailable = true;
+    } catch (err) {
+      console.log(`[BackgroundTask] ✗ Live ping failed (offline): ${err?.message}`);
+      // Don't set isNetworkAvailable to false here, otherwise it might never 
+      // wake up again in the background to try. We will just try again next interval.
     }
   }
 });
@@ -360,12 +371,16 @@ export const LocationProvider = ({ children }) => {
   /**
    * Flush all offline-stored points to the server in batches.
    */
-  const flushOfflineQueue = async () => {
+  const flushOfflineQueue = async (jobIdToFlush) => {
     try {
-      const unsynced = await getUnsyncedPoints();
+      // If no specific jobId provided, try to flush the currently active one
+      const jobId = jobIdToFlush || (currentJob?.id) || (await AsyncStorage.getItem('@pps_active_job_id'));
+      if (!jobId) return;
+
+      const unsynced = await getUnsyncedPoints(jobId);
       if (unsynced.length === 0) return;
 
-      console.log(`[LocationContext] Flushing ${unsynced.length} offline points...`);
+      console.log(`[LocationContext] Flushing ${unsynced.length} offline points for job ${jobId}...`);
 
       // Send in batches of 50 to avoid huge payloads
       const batchSize = 50;
@@ -373,6 +388,7 @@ export const LocationProvider = ({ children }) => {
         const batch = unsynced.slice(i, i + batchSize);
         try {
           await api.post('/location/batch', {
+            job_id: jobId, // Backend can use this if provided
             points: batch.map(p => ({
               latitude: p.latitude,
               longitude: p.longitude,
@@ -381,7 +397,7 @@ export const LocationProvider = ({ children }) => {
               heading: p.heading || 0,
             })),
           });
-          await markSynced(batch.map(p => p.id));
+          await markSynced(jobId, batch.map(p => p.id));
           console.log(`[LocationContext] ✓ Batch ${Math.floor(i / batchSize) + 1} flushed (${batch.length} points)`);
         } catch (err) {
           console.log(`[LocationContext] ✗ Batch flush failed: ${err?.message}`);
@@ -402,15 +418,15 @@ export const LocationProvider = ({ children }) => {
       setCurrentJob(job);
       setIsTracking(true);
 
+      // Set active job ID in AsyncStorage for the background task to read when React is dead
+      await AsyncStorage.setItem('@pps_active_job_id', String(job.id));
+
       // Reset filters for new trip
       kalmanFilter.reset();
       lastRecordedPoint = null;
       lastHeading = null;
       lastSyncTime = 0;
       routeCoordinates = [];
-
-      // Clear any stale data from previous trips
-      await clearLocationStore();
 
       // Remove existing subscriptions
       if (subscriptionRef.current) {
@@ -461,7 +477,7 @@ export const LocationProvider = ({ children }) => {
       // ── Track stored point count for UI ──
       if (pointCountIntervalRef.current) clearInterval(pointCountIntervalRef.current);
       pointCountIntervalRef.current = setInterval(async () => {
-        const count = await getPointCount();
+        const count = await getPointCount(job.id);
         setStoredPointCount(count);
       }, 5000);
 
@@ -475,6 +491,13 @@ export const LocationProvider = ({ children }) => {
    */
   const stopTracking = async () => {
     console.log('[LocationContext] Stopping tracking...');
+    
+    const jobId = currentJob?.id || await AsyncStorage.getItem('@pps_active_job_id');
+    if (jobId) {
+      await markJobCompleteAndRetain(jobId);
+    }
+    await AsyncStorage.removeItem('@pps_active_job_id');
+
     setIsTracking(false);
     setCurrentJob(null);
     setStoredPointCount(0);
