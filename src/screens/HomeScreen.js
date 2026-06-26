@@ -115,21 +115,39 @@ export default function HomeScreen({ navigation }) {
 
     setSyncing(true);
     let successCount = 0;
+    let notFoundCount = 0;
+    let errorCount = 0;
 
-    try {
-      for (const jobId of ids) {
-        const points = await getRouteCoordinates(jobId);
-        if (points.length > 0) {
+    for (const jobId of ids) {
+      const points = await getRouteCoordinates(jobId);
+      if (points.length > 0) {
+        try {
           await api.post(`/job/${jobId}/sync-geometry`, { points });
           successCount++;
+        } catch (e) {
+          console.log(`[HomeScreen] Sync error for job ${jobId}:`, e.message);
+          if (e.response && e.response.status === 404) {
+            notFoundCount++;
+            // Optionally remove the local trip since it doesn't exist on the server
+            // await removeCompletedTripId(jobId);
+          } else {
+            errorCount++;
+          }
         }
       }
+    }
+    
+    setSyncing(false);
+
+    if (errorCount > 0 || notFoundCount > 0) {
+      Alert.alert(
+        'Sync Summary',
+        `Successfully synced: ${successCount} route(s)\n` +
+        (notFoundCount > 0 ? `Unregistered trips skipped: ${notFoundCount}\n` : '') +
+        (errorCount > 0 ? `Failed due to network: ${errorCount}` : '')
+      );
+    } else {
       Alert.alert('Sync Complete', `Successfully synced ${successCount} route(s) to the server.`);
-    } catch (e) {
-      console.log('[HomeScreen] Sync error:', e.message);
-      Alert.alert('Sync Error', `Failed to sync all routes. Synced ${successCount} before error occurred.`);
-    } finally {
-      setSyncing(false);
     }
   };
 

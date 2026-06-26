@@ -2,22 +2,22 @@ import React, { useState, useContext } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Image } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Eye, EyeClosed, EnvelopeSimple, LockKey } from 'phosphor-react-native';
+import { Eye, EyeClosed, Phone, LockKey } from 'phosphor-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Dimensions } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error } = useContext(AuthContext);
   const insets = useSafeAreaInsets();
 
   const handleLogin = async () => {
-    if (!email || !password) return;
-    try { await login(email, password); } catch (e) {}
+    if (!phone || !password) return;
+    try { await login(phone, password); } catch (e) {}
   };
 
   return (
@@ -63,11 +63,11 @@ export default function LoginScreen() {
         ) : null}
         
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>EMAIL</Text>
+          <Text style={styles.label}>PHONE NUMBER</Text>
           <View style={styles.inputWrapper}>
-            <EnvelopeSimple size={16} color="#0A58CA" style={styles.inputIcon} />
-            <TextInput style={styles.input} placeholder="driver@ppspurnea.com" placeholderTextColor="#94a3b8"
-              value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" editable={!isLoading} />
+            <Phone size={16} color="#0A58CA" style={styles.inputIcon} />
+            <TextInput style={styles.input} placeholder="7763972896" placeholderTextColor="#94a3b8"
+              value={phone} onChangeText={setPhone} autoCapitalize="none" keyboardType="phone-pad" editable={!isLoading} />
           </View>
         </View>
 
@@ -84,8 +84,8 @@ export default function LoginScreen() {
         </View>
 
         <TouchableOpacity 
-          style={[styles.button, (!email || !password || isLoading) && styles.buttonDisabled]} 
-          onPress={handleLogin} disabled={!email || !password || isLoading} activeOpacity={0.85}>
+          style={[styles.button, (!phone || !password || isLoading) && styles.buttonDisabled]} 
+          onPress={handleLogin} disabled={!phone || !password || isLoading} activeOpacity={0.85}>
           {isLoading ? <ActivityIndicator color="#0A1931" size="small" /> : <Text style={styles.buttonText}>SIGN IN</Text>}
         </TouchableOpacity>
 

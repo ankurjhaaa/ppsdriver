@@ -54,12 +54,12 @@ export const AuthProvider = ({ children }) => {
     setIsBootstrapping(false);
   };
 
-  const login = async (email, password) => {
-    console.log('[AuthContext] Initiating login for email/phone:', email);
+  const login = async (phone, password) => {
+    console.log('[AuthContext] Initiating login for phone:', phone);
     setIsLoading(true);
     setError(null);
     try {
-      const response = await api.post('/login', { email, password });
+      const response = await api.post('/login', { phone, password });
       const { token, user, driver } = response.data;
       console.log('[AuthContext] Login successful. Saving token to SecureStore. User:', user.name);
       await SecureStore.setItemAsync('userToken', token);
