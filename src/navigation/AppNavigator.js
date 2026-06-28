@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
-import { House, MapTrifold, Wallet, ClockCounterClockwise, UserCircle } from 'phosphor-react-native';
+import { House, MapTrifold, Wallet, ClockCounterClockwise, UserCircle, Bank } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 
@@ -11,6 +11,7 @@ import LoginScreen from '../screens/LoginScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ActiveJobScreen from '../screens/ActiveJobScreen';
 import WalletScreen from '../screens/WalletScreen';
+import SalaryScreen from '../screens/SalaryScreen';
 import RoutesScreen from '../screens/RoutesScreen';
 import JobHistoryScreen from '../screens/JobHistoryScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -76,7 +77,12 @@ const TabNavigator = () => {
         component={RoutesScreen} 
         options={{ tabBarLabel: 'Routes', tabBarIcon: ({ color }) => <MapTrifold color={color} size={26} weight="fill" /> }} 
       />
-      <Tab.Screen 
+      <Tab.Screen
+        name="SalaryTab"
+        component={SalaryScreen}
+        options={{ tabBarLabel: 'Salary', tabBarIcon: ({ color }) => <Bank color={color} size={26} weight="fill" /> }}
+      />
+      <Tab.Screen
         name="WalletTab" 
         component={WalletScreen} 
         options={{ tabBarLabel: 'Wallet', tabBarIcon: ({ color }) => <Wallet color={color} size={26} weight="fill" /> }} 
